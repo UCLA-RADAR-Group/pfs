@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.4  2002/04/27 20:23:06  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.3  2002/04/27 06:13:14  margot
    Now exits if input file cannot be opened.
 
@@ -123,6 +126,7 @@ int main(int argc, char *argv[])
     case  3:  smpwd = 2; maxunpack = +255; break; 
     case  5:  smpwd = 4; maxunpack =   +3; break;
     case  6:  smpwd = 2; maxunpack =  +15; break;
+    case  8:  smpwd = 2; maxunpack = +255; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -144,8 +148,7 @@ int main(int argc, char *argv[])
   bufsize = (int) rint(1000000/downsample) * downsample;
 
   if (filestat.st_size % downsample != 0)
-    fprintf(stderr,"This may leave the last buffer truncated\n",
-	    filestat.st_size,downsample);
+    fprintf(stderr,"This may leave the last buffer truncated\n");
   else
     /* if the filesize is a multiple of the downsampling factor, */
     /* we try to choose a buffer size that will fit nicely as well */
@@ -183,6 +186,10 @@ int main(int argc, char *argv[])
 	  unpack_pfs_2c4b(buffer, rcp, bufsize);
 	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
 	  break;
+	case 3: 
+	  unpack_pfs_2c8b(buffer, rcp, bufsize);
+	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
+	  break;
 	case 5:
 	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
 	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
@@ -192,6 +199,10 @@ int main(int argc, char *argv[])
 	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
 	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
 	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq); 
+	  break;
+     	case 8: 
+	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
 	  break;
 	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
 	}
