@@ -29,6 +29,11 @@
 
 /* 
    $Log$
+   Revision 3.1  2003/05/29 22:51:40  cvs
+   Fixed bug in allocation of rcp[]: should be 2*nsamples long
+   Fixed bug in detect power: should operate on outbuf[], not rcp[]
+   Fixed bug in transferring rcp to outbuf: loop should be 2*nsamples
+
    Revision 3.0  2003/02/22 02:09:08  cvs
    Revised by Joseph Jao to speed unpacking.
 
@@ -124,7 +129,10 @@ int main(int argc, char *argv[])
   int ascii;		/* text output */
   int mdetect;		/* magnitude output */
   int pdetect;		/* power output */
+  char *format;		/* print format */
   int i,j;
+  
+  format = (char *) malloc(100);
 
   /* get the command line arguments and open the files */
   processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii,&mdetect,&pdetect,&fsamp,&foff);
@@ -269,12 +277,17 @@ int main(int argc, char *argv[])
       /* write data to output file */
       if (ascii)
 	{
+	  if (mode == 32) 
+	    sprintf(format, "%% .3f %% .3f\n");
+	  else
+	    sprintf(format, "%% .0f %% .0f\n");
+
 	  if (mdetect || pdetect)
 	    for (i = 0; i < nsamples; i++)
 	      fprintf(stdout,"% .3f\n",outbuf[i]);
 	  else
 	    for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	      fprintf(stdout,"% .0f % .0f\n",outbuf[j],outbuf[j+1]);
+	      fprintf(stdout,format,outbuf[j],outbuf[j+1]);
 	}
       else
 	{
