@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.6  2002/06/05 22:22:55  cvs
+   Changed computation of outbufsize with -d option.
+
    Revision 2.5  2002/05/26 04:21:42  cvs
    Better scheme for handling short buffers, including those at end of file.
 
@@ -149,6 +152,7 @@ int main(int argc, char *argv[])
     case  5: smpwd = 4; break;
     case  6: smpwd = 2; break;
     case  8: smpwd = 2; break;
+    case 16: smpwd = 1; break; 
     case 32: smpwd = 0.5; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
@@ -206,6 +210,9 @@ int main(int argc, char *argv[])
 	  break;
      	case 8: 
 	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  break;
+     	case 16: 
+	  unpack_pfs_signed16bits(buffer, rcp, bufsize);
 	  break;
      	case 32: 
 	  memcpy(rcp,buffer,bufsize);
@@ -319,7 +326,7 @@ double   *foff;
   char *myoptions = "m:c:o:adf:x:"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-o outfile] [infile] ";
   char *USAGE2="For phase rotation, also specify [-f sampling frequency (MHz)] [-x desired frequency offset (Hz)] ";
-  char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
+  char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
 
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
