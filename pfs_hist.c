@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 1.7  2002/05/01 05:29:33  cvs
+   Fixed bug in handling of mode 3 (2c8b) histograms.
+
    Revision 1.6  2002/04/27 20:22:26  margot
    Removed obsolete routines specific to Golevka Sampling Box.
 
@@ -69,8 +72,8 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void iq_hist(float *inbuf, int nsamples, int levels);
-void iq_hist_8b(float *inbuf, int nsamples, int levels);
+void iq_hist(char *inbuf, int nsamples, int levels);
+void iq_hist_8b(char *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
 {
@@ -78,7 +81,7 @@ int main(int argc, char *argv[])
   int mode;		/* data acquisition mode */
   int bufsize = 1048576;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
+  char *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
@@ -134,8 +137,8 @@ int main(int argc, char *argv[])
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer = (char *) malloc(bufsize);
-  rcp = (float *) malloc(2 * nsamples * sizeof(float));
-  lcp = (float *) malloc(2 * nsamples * sizeof(float));
+  rcp = (char *) malloc(2 * nsamples * sizeof(char));
+  lcp = (char *) malloc(2 * nsamples * sizeof(char));
   if (lcp == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
@@ -167,22 +170,25 @@ int main(int argc, char *argv[])
       iq_hist_8b(rcp, nsamples, levels);
       break;
     case 5:
-      unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+      unpack_pfs_4c2b_rcp(buffer, rcp, bufsize);
+      unpack_pfs_4c2b_lcp(buffer, lcp, bufsize);
+
       fprintf(fpoutput,"RCP hist\n");
       iq_hist(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP hist\n");
       iq_hist(lcp, nsamples, levels);
       break;
     case 6:
-      unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+      unpack_pfs_4c4b_rcp(buffer, rcp, bufsize);
+      unpack_pfs_4c4b_lcp(buffer, lcp, bufsize);
+
       fprintf(fpoutput,"RCP hist\n");
       iq_hist(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP hist\n");
       iq_hist(lcp, nsamples, levels);
       break;
     case 8: 
-      unpack_pfs_signedbytes(buffer, rcp, bufsize);
-      iq_hist_8b(rcp, nsamples, levels);
+      iq_hist_8b(buffer, nsamples, levels);
       break;
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
     }
@@ -193,7 +199,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	iq_hist						         	      */
 /******************************************************************************/
-void iq_hist(float *inbuf, int nsamples, int levels)
+void iq_hist(char *inbuf, int nsamples, int levels)
 {
   double i=0;
   double q=0;
@@ -229,7 +235,7 @@ void iq_hist(float *inbuf, int nsamples, int levels)
 /******************************************************************************/
 /*	iq_hist_8b					         	      */
 /******************************************************************************/
-void iq_hist_8b(float *inbuf, int nsamples, int levels)
+void iq_hist_8b(char *inbuf, int nsamples, int levels)
 {
   double i=0;
   double q=0;
