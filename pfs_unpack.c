@@ -29,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 2.8  2002/09/29 17:58:23  cvs
+   Added -p option for square-law detection and power output
+
    Revision 2.7  2002/07/25 22:38:29  cvs
    Added mode 16 for 16-bit signed integers.
 
@@ -105,7 +108,8 @@ int main(int argc, char *argv[])
   int outbufsize;	/* output buffer size */
   int bytesread;	/* number of bytes read from input file */
   char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
+  char *rcp;		/* char buffer for unpacked data */
+  float *outbuf;	/* float buffer for unpacked data */
   double fsamp;		/* sampling frequency, MHz */
   double foff;		/* frequency offset, Hz */
   double timeint;	/* sampling interval */ 
@@ -165,10 +169,11 @@ int main(int argc, char *argv[])
   /* allocate storage */
   nsamples = (int) rint(bufsize * smpwd / 4.0);
   outbufsize = 2 * nsamples * sizeof(float);
+  outbuf = (float *) malloc(outbufsize);
   buffer = (char *) malloc(bufsize);
-  rcp = (float *) malloc(outbufsize);
-  lcp = (float *) malloc(outbufsize);
-  if (lcp == NULL) 
+  rcp = (char *) malloc(bufsize);
+
+  if (rcp == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -206,31 +211,39 @@ int main(int argc, char *argv[])
 	  unpack_pfs_2c8b(buffer, rcp, bufsize);
 	  break;
 	case 5:
-	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, outbufsize);
+	  if (chan == 2) 
+	    unpack_pfs_4c2b_lcp(buffer, rcp, bufsize);
+	  else 
+	    unpack_pfs_4c2b_rcp(buffer, rcp, bufsize);
 	  break;
 	case 6:
-	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, outbufsize);
+	  if (chan == 2) 
+	    unpack_pfs_4c4b_lcp(buffer, rcp, bufsize);
+	  else 
+	    unpack_pfs_4c4b_rcp(buffer, rcp, bufsize);
 	  break;
      	case 8: 
-	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  memcpy (rcp, buffer, bufsize);
 	  break;
      	case 16: 
-	  unpack_pfs_signed16bits(buffer, rcp, bufsize);
+	  unpack_pfs_signed16bits(buffer, outbuf, bufsize);
 	  break;
-     	case 32: 
-	  memcpy(rcp,buffer,bufsize);
+	case 32:
+	  memcpy (outbuf, buffer, bufsize);
 	  break;
 	default: 
 	  fprintf(stderr,"mode not implemented yet\n"); 
 	  exit(1);
 	}
+      if (mode != 16 && mode != 32)
+	for (i = 0; i < bufsize; i++) 
+	  outbuf[i] = (float) rcp[i];
+      
 
       /* optionally apply phase rotation and increment time */
       if (foff != 0)
 	{
-	  apply_linear_phase(rcp,foff,time,timeint,nsamples);
+	  apply_linear_phase(outbuf,foff,time,timeint,nsamples);
 	  time += timeint * nsamples;
 	}
 
@@ -239,7 +252,7 @@ int main(int argc, char *argv[])
 	{
 	  outbufsize = nsamples * sizeof(float);
 	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	    rcp[i] = sqrt(rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1]);
+	    outbuf[i] = sqrt(outbuf[j]*outbuf[j]+outbuf[j+1]*outbuf[j+1]);
 	}
 
       /* optionally compute power */
@@ -255,14 +268,14 @@ int main(int argc, char *argv[])
 	{
 	  if (mdetect || pdetect)
 	    for (i = 0; i < nsamples; i++)
-	      fprintf(stdout,"% .3f\n",rcp[i]);
+	      fprintf(stdout,"% .3f\n",outbuf[i]);
 	  else
 	    for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	      fprintf(stdout,"% .0f % .0f\n",rcp[j],rcp[j+1]);
+	      fprintf(stdout,"% .0f % .0f\n",outbuf[j],outbuf[j+1]);
 	}
       else
 	{
-	  if (outbufsize != write(fdoutput,rcp,outbufsize))
+	  if (outbufsize != write(fdoutput,outbuf,outbufsize))
 	    fprintf(stderr,"Write error\n");  
 	}
     }
