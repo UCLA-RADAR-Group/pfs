@@ -12,6 +12,7 @@
 *              [-r frequency resolution (Hz)] 
 *	       [-h f0,df,n (KHz)]
 *              [-b (binary output)] 
+*              [-i (invert frequency axis)] 
 *              [-o outfile] [infile]
 *
 *  input:
@@ -29,6 +30,10 @@
 
 /* 
    $Log$
+   Revision 1.4  2001/07/07 15:35:24  margot
+   Added -b option for binary output.
+   Fixed rounding of integer quantities.
+
    Revision 1.3  2001/07/06 19:34:40  margot
    Added baseline subtraction.
 
@@ -87,11 +92,11 @@ int main(int argc, char *argv[])
   int shift;		/* shift by this many locations between hops */
   int open_flags;	/* flags required for open() call */
   int binary;		/* binary output */
-  int inverted = 0;	/* frequency axis inverted */
+  int inverted;		/* frequency axis inverted */
   int i,j,k,l,m;	/* indices */
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&fsamp,&freqres,&dwell,&f0,&df,&hops,&binary);
+  processargs(argc,argv,&infile,&outfile,&fsamp,&freqres,&dwell,&f0,&df,&hops,&binary,&inverted);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -110,11 +115,11 @@ int main(int argc, char *argv[])
 
 
   /* compute transform parameters */
-  fftlen = fsamp * 1e3 / freqres;
-  inbufsize = fftlen * sizeof(float); 
+  fftlen     = (int) rint(fsamp * 1e3 / freqres);
+  shift      = (int) rint(df    * 1e3 / freqres);
   fftsperhop = (int) rint(dwell * freqres);
-  init  = (int) rint(fftlen / 2.0 + f0 * 1e3 / freqres);
-  shift = (int) rint(df * 1e3 / freqres);
+  init       = (int) rint(fftlen / 2.0 + f0 * 1e3 / freqres);
+  inbufsize = fftlen * sizeof(float); 
   outbufsize = shift * sizeof(float);
 
   fprintf(stderr,"\n%s\n\n",command_line);
@@ -142,6 +147,7 @@ int main(int argc, char *argv[])
 
   /* sum transforms */
   zerofill(total, fftlen);
+  zerofill(baseline, shift);
   /* read data buffers until EOF */
   while (1)
     {
@@ -161,6 +167,9 @@ int main(int argc, char *argv[])
 		  l = init - shift / 2 + (hops-k-1) * shift;
 		else
 		  l = init - shift / 2 + k * shift; 
+		
+		/* need to check bounds on l or have modulo here */
+
 		/* sum data */
 		if (k == i)
 		  for (m = 0; m < shift; m++)
@@ -197,7 +206,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,fsamp,freqres,dwell,f0,df,hops,binary)
+void	processargs(argc,argv,infile,outfile,fsamp,freqres,dwell,f0,df,hops,binary,inverted)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -209,6 +218,7 @@ double  *f0;
 double  *df;
 int     *hops;
 int     *binary;
+int     *inverted;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_dehop program:
@@ -221,8 +231,8 @@ int     *binary;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "f:d:r:h:o:b"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_dehop [-f sampling frequency (KHz)] [-d dwell time (s)] [-r frequency resolution (Hz)] [-h f0,df,n (KHz)] [-b (binary output)] [-o outfile] [infile]";
+  char *myoptions = "f:d:r:h:o:bi"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_dehop [-f sampling frequency (KHz)] [-d dwell time (s)] [-r frequency resolution (Hz)] [-h f0,df,n (KHz)] [-b (binary output)] [-i (invert frequency axis)] [-o outfile] [infile]";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
@@ -238,6 +248,7 @@ int     *binary;
   *df = 0;
   *hops = 1;
   *binary = 0;
+  *inverted = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -266,6 +277,11 @@ int     *binary;
 
       case 'b':
 	*binary = 1;
+	arg_count += 1;
+	break;	
+
+      case 'i':
+	*inverted = 1;
 	arg_count += 1;
 	break;	
 
