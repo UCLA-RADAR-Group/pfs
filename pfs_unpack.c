@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.2  2002/05/12 15:50:11  cvs
+   Added detect option and better checks on buffer size.
+
    Revision 2.1  2002/05/12 13:42:26  cvs
    Added mode 32 for floats.
 
@@ -124,8 +127,6 @@ int main(int argc, char *argv[])
       exit(1);
     }
   if (filestat.st_size < bufsize) bufsize = filestat.st_size;
-  if (filestat.st_size % bufsize != 0) 
-    bufsize = filestat.st_size / (int) rint(filestat.st_size / bufsize);
   fprintf(stderr,"Unpacking file of size %d with %d byte buffers\n",
 	  filestat.st_size,bufsize);
   if (filestat.st_size % bufsize != 0) 
@@ -230,7 +231,7 @@ int main(int argc, char *argv[])
 	}
       else
 	{
-	  if (detect)
+	  if (!detect)
 	    {
 	      if (outbufsize != write(fdoutput,rcp,outbufsize))
 		fprintf(stderr,"Write error\n");  
