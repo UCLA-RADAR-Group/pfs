@@ -26,6 +26,11 @@
 
 /* 
    $Log$
+   Revision 2.0  2002/05/02 05:54:16  cvs
+   Added capability to apply phase rotation with -f and -x options.
+   Added apply_linear_phase() function.
+   Now checking input file size and selecting a compatible buffer size.
+
    Revision 1.5  2002/05/02 03:38:25  cvs
    Added unpacking of mode 8, signed bytes.
 
@@ -81,7 +86,7 @@ int main(int argc, char *argv[])
   double timeint;	/* sampling interval */ 
   double time;		/* time */ 
   int mode;
-  int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int ascii;		/* text output */
@@ -125,6 +130,7 @@ int main(int argc, char *argv[])
     case  5: smpwd = 4; break;
     case  6: smpwd = 2; break;
     case  8: smpwd = 2; break;
+    case 32: smpwd = 0.5; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -180,6 +186,9 @@ int main(int argc, char *argv[])
      	case 8: 
 	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
 	  break;
+     	case 32: 
+	  memcpy(rcp,buffer,bufsize);
+	  break;
 	default: 
 	  fprintf(stderr,"mode not implemented yet\n"); 
 	  exit(1);
@@ -196,7 +205,8 @@ int main(int argc, char *argv[])
       if (ascii)
 	{
 	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	    fprintf(stdout,"% .0f % .0f\n",rcp[j],rcp[j+1]);
+	    fprintf(stdout,"% .0f % .0f %.0f\n",rcp[j],rcp[j+1],
+		    sqrt(rcp[i]*rcp[i]+rcp[i+1]*rcp[i+1]));
 	}
       else
 	if (outbufsize != write(fdoutput,rcp,outbufsize))
