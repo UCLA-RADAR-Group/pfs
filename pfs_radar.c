@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.2  2002/12/28 07:47:25  cvs
+   Added printout of computer clock value to logfile every 50 buffers.
+
    Revision 2.1  2002/05/12 16:00:54  cvs
    Changed default values of i/o buffer sizes.
 
@@ -102,6 +105,8 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int cycles;
   int ringbufs;
   int nfiles;
+  long lcode;
+  long lfft;
   char *dir;     /* disk directory if selected */ 
   char *istape;  /* tape device if selected */ 
   int dw_count;  /* current index into dw_multi */
@@ -118,9 +123,12 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int pack;
 } radar;
 
+#define SECS   9000		/* default number of seconds to take */
+#define NFILES 40		/* default number of files to open */
+#define LCODE 7812500		/* default code length to determine file size */
+#define LFFT 128		/* default fft length to determine file size */
 #define AMEG (1000*1000)	/* default size of edt ring buffer */
 #define RINGBUFS  64		/* default number of one meg edt ring buffers */
-#define SECS   9000		/* default number of seconds to take */
 #define AFEWSECS  3		/* interval bw key pressed and toggle EDT bit */
 
 int ctlc_flag = 0;
@@ -141,9 +149,7 @@ int main(int argc, char *argv[])
   int time_set = 0;
   struct timeval timenow;
   struct timezone tz;
-
   long long size;
-  long  lcode = 7812500, lfft = 128;
 
 #ifdef TIMER
   struct timeval   now;
@@ -160,12 +166,13 @@ int main(int argc, char *argv[])
   r->secs = SECS;
   r->step = 0;
   r->cycles = 1;
-  r->nfiles = 40;
+  r->nfiles = NFILES;
+  r->lcode = LCODE;
+  r->lfft = LFFT;
   r->dw_multi = 20;
   w = &r->dw[0];
   wlast = NULL;
   r->istape = NULL;
-
   r->dir = NULL;
 
   /* process the command line */
@@ -245,13 +252,13 @@ int main(int argc, char *argv[])
       r->istape = argv[++i];
     } else if( strncasecmp( p, "-code", strlen(p) ) == 0 ) {
       p = argv[++i];
-      if(( lcode = atoi(p))<=0 ) {
+      if(( r->lcode = atoi(p))<=0 ) {
         fprintf(stderr, "bad value for -code\n");
         pusage();
       }
     }  else if( strncasecmp( p, "-fft", strlen(p) ) == 0 ) {
       p = argv[++i];
-      if(( lfft = atoi(p))<=0 ) {
+      if(( r->lfft = atoi(p))<=0 ) {
         fprintf(stderr, "bad value for -fft\n");
         pusage();
       }
@@ -259,8 +266,8 @@ int main(int argc, char *argv[])
   }
 
   /* set maximum size of individual datafiles */
-  size = lcode * lfft;
-  while (size < 1000000000) { size = size * 2; }
+  size = r->lcode * r->lfft;
+  while (size < pow(2,30)-1) { size = size * 2; }
   multi_config_maxfilesize ((long long) size); 
 
   /* check that sampling mode is valid */
