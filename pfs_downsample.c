@@ -6,10 +6,11 @@
 *
 *  usage:
 *  	pfs_downsample -m mode -d downsampling factor 
-*                      [-s scale fudge factor]
-*                      [-f output floating point numbers]
+*                      [-f scale fudge factor]
+*                      [-b output signed bytes (default is floats)]
 *                      [-I dcoffi] [-Q dcoffq] 
 *                      [-c channel] 
+*                      [-s number of complex samples to skip] 
 *                      [-o outfile] [infile]
 *
 *  input:
@@ -20,11 +21,16 @@
 *
 *  output:
 *	the -o option identifies the output file, stdout is default
-*       the sums are written as signed bytes or floats if -f is used
+*       4-byte floating point numbers or signed bytes if -b is used
 *******************************************************************************/
 
 /* 
    $Log$
+   Revision 3.0  2003/02/22 02:29:18  cvs
+   Very extensive surgery by Joseph Jao for faster processing.
+   Threads are used to read and process in parallel mode.
+   Byte manipulation is used instead of float manipulation.
+
    Revision 1.10  2002/11/11 18:46:33  cvs
    Multiplied default buffer size by two.
 
@@ -78,7 +84,7 @@ int	fdoutput;		/* file descriptor to output file */
 
 char	command_line[200];	/* command line assembled by processargs */
 int	verbose = 0;
-int	floats  = 0;
+int	floats  = 1;    /* default output format is floating point */
 int	downsample;	/* factor by which to downsample */
 int     nsamples; 	/* # of complex samples in each buffer */
 float	smpwd;		/* # of single pol complex samples in a 4 byte word */
@@ -121,6 +127,8 @@ int main(int argc, char *argv[])
   float maxvalue;	/* maximum achievable value by downsampling */
   float fudge;		/* scale fudge factor */
   int open_flags;	/* flags required for open() call */
+  int samplestoskip;	/* number of complex samples to skip */
+  int bytestoskip;	/* number of bytes to skip */
   int i;
 
   char   *outfile;	/* output file name */
@@ -129,10 +137,24 @@ int main(int argc, char *argv[])
   struct jdata cntlbuf;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&downsample,&chan,&dcoffi,&dcoffq,&fudge);
+  processargs(argc,argv,&infile,&outfile,&mode,&downsample,&chan,&dcoffi,&dcoffq,&fudge,&samplestoskip);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
+
+  /* set mode */
+  switch (mode)
+    {
+    case -1:  smpwd = 8; maxunpack =   +3; break;  
+    case  1:  smpwd = 8; maxunpack =   +3; break;
+    case  2:  smpwd = 4; maxunpack =  +15; break;
+    case  3:  smpwd = 2; maxunpack = +255; break; 
+    case  5:  smpwd = 4; maxunpack =   +3; break;
+    case  6:  smpwd = 2; maxunpack =  +15; break;
+    case  8:  smpwd = 2; maxunpack = +255; break;
+    case 32:  smpwd = 0.5; maxunpack = +255; break;
+    default: fprintf(stderr,"Invalid mode\n"); exit(1);
+    }
 
   /* open file input */
 #ifdef LARGEFILE
@@ -153,11 +175,33 @@ int main(int argc, char *argv[])
       perror("input file status");
       exit(1);
       } 
-
+  
+  /* test size compatibility */ 
   if (filestat.st_size % 4 != 0)
     fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", filestat.st_size);
   if (filestat.st_size % downsample != 0)
     fprintf(stderr,"Warning: file size %d is not a multiple of the downsampling factor\n", filestat.st_size);
+
+  /* skip samples if needed */
+  if (samplestoskip != 0)
+  {
+    bytestoskip = 4 * samplestoskip / smpwd;
+    fprintf(stderr, "Skipping %d complex samples, equivalent to %d bytes\n", samplestoskip, bytestoskip);
+    /* skip desired amount of bytes */
+    if (bytestoskip != lseek(fdinput, bytestoskip, SEEK_SET))
+      {
+        perror("lseek");
+        fprintf(stderr, "Unable to skip %d bytes\n",bytestoskip);
+        exit(1);
+      }
+    /* test new size compatibility */ 
+    if ((filestat.st_size - bytestoskip) % 4 != 0)
+      fprintf(stderr,"Warning: file size %d with %d bytes skipped is not a multiple of 4\n", 
+	      filestat.st_size,bytestoskip);
+    if ((filestat.st_size - bytestoskip) % downsample != 0)
+      fprintf(stderr,"Warning: file size %d with %d bytes skipped is not a multiple of the downsampling factor\n", 
+	      filestat.st_size,bytestoskip);
+  }
 
   /* open output file, stdout is default */
   if (outfile[0] == '-') {
@@ -167,19 +211,6 @@ int main(int argc, char *argv[])
      perror("open input file");
      exit(1);
   }
-
-  switch (mode)
-    {
-    case -1:  smpwd = 8; maxunpack =   +3; break;  
-    case  1:  smpwd = 8; maxunpack =   +3; break;
-    case  2:  smpwd = 4; maxunpack =  +15; break;
-    case  3:  smpwd = 2; maxunpack = +255; break; 
-    case  5:  smpwd = 4; maxunpack =   +3; break;
-    case  6:  smpwd = 2; maxunpack =  +15; break;
-    case  8:  smpwd = 2; maxunpack = +255; break;
-    case 32:  smpwd = 0.5; maxunpack = +255; break;
-    default: fprintf(stderr,"Invalid mode\n"); exit(1);
-    }
 
   /* compute dynamic range parameters */
   fprintf(stderr,"Downsampling file of size %d KB by %d\n", (int) (filestat.st_size / 1000), downsample);
@@ -197,7 +228,7 @@ int main(int argc, char *argv[])
   /* we need a multiple of the downsampling factor, or order 1 MB */
   bufsize = 8 * (int) rint(1000000/downsample) * downsample;
   fprintf(stderr,"Using %d buffers of size %d\n", 
-	  filestat.st_size / bufsize, bufsize);
+	  (filestat.st_size - bytestoskip) / bufsize, bufsize);
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
@@ -214,6 +245,7 @@ int main(int argc, char *argv[])
   }
 
   if (!channel1 || !channel2 || !buffer1 || !buffer2) fprintf(stderr,"Malloc error\n");
+
 
   if (nsamples % downsample != 0)
     fprintf(stderr,"Warning: # samples per buffer %d, downsampling factor %d\n",
@@ -475,7 +507,7 @@ void *iq_downsample (void *pdata)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,downsample,chan,dcoffi,dcoffq,fudge)
+void	processargs(argc,argv,infile,outfile,mode,downsample,chan,dcoffi,dcoffq,fudge,samplestoskip)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -486,6 +518,7 @@ int     *chan;
 float   *dcoffi;
 float   *dcoffq;
 float   *fudge;
+int 	*samplestoskip;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_downsample program:
@@ -498,8 +531,8 @@ float   *fudge;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:d:c:s:I:Q:f"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s scale fudge factor] [-f output floating point numbers] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
+  char *myoptions = "m:o:d:c:s:I:Q:b:f"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -515,6 +548,8 @@ float   *fudge;
   *dcoffi = 0;
   *dcoffq = 0;
   *fudge = 1;
+  *samplestoskip = 0;
+  floats = 1;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -551,14 +586,19 @@ float   *fudge;
       arg_count += 2;
       break;
       
-    case 's':
+    case 'f':
       sscanf(optarg,"%f",fudge);
       arg_count += 2;
       break;
       
-    case 'f':
-      floats = 1;
+    case 'b':
+      floats = 0;
       arg_count += 1;
+      break;
+
+    case 's':
+      sscanf(optarg,"%d",samplestoskip);
+      arg_count += 2;		/* two command line arguments */
       break;
 
     case '?':			 /*if not in myoptions, getopt rets ? */
@@ -579,6 +619,8 @@ float   *fudge;
   errout: fprintf(stderr,"%s\n",rcsid);
           fprintf(stderr,"Usage: %s\n",USAGE1);
           fprintf(stderr,"%s",USAGE2);
+
+	  printf ("%c  %s \n", c, optarg);
 	  exit(1);
 }
 
