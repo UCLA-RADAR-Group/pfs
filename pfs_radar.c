@@ -30,6 +30,11 @@
 
 /* 
    $Log$
+   Revision 2.4  2003/01/08 03:51:52  cvs
+   Better handling of CTRL-C for multiple cycles.
+   Preventing multiple instances of pfs_radar with lock file pfs.lock.
+   Flushing radar.log file after each print statement.
+
    Revision 2.3  2002/12/28 10:13:19  cvs
    Made calculation of maximum file size more transparent.
 
@@ -325,10 +330,10 @@ int main(int argc, char *argv[])
     }
   set_kb(1);
   /* if successful, open lock file */
-  if (fdlock = open("pfs.lock",(O_RDWR|O_CREAT|O_EXCL),(S_IRWXU|S_IRWXG|S_IRWXO)) < 0)
+  if (fdlock = open("/tmp/pfs.lock",(O_RDWR|O_CREAT|O_EXCL),(S_IRWXU|S_IRWXG|S_IRWXO)) < 0)
     {
       fprintf(stderr,
-	      "Another process is accessing EDT card or a stale pfs.lock file exists.\n");
+	      "Another process is accessing EDT card or a stale /tmp/pfs.lock file exists.\n");
       system("ps -ef | grep pfs_");
       set_kb(0);
       exit(1);
@@ -512,7 +517,7 @@ int main(int argc, char *argv[])
   edt_close(r->edt);
   fclose(r->logfd);
   set_kb(0);
-  unlink("pfs.lock");
+  unlink("/tmp/pfs.lock");
   close(fdlock);
   exit(0);
 }
