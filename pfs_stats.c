@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 2.3  2002/06/05 16:56:01  cvs
+   Added > sign for easier parsing of output.
+
    Revision 2.2  2002/05/26 04:22:23  cvs
    Prints warning for odd file sizes.
 
@@ -80,14 +83,16 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void sum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
+void sum(char *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
+void floatsum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
 
 int main(int argc, char *argv[])
 {
   struct stat filestat;	/* input file status structure */
   int bufsize = 1000000;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
+  char *rcp,*lcp;	/* buffer for unpacked data */
+  float *fbuffer;	/* buffer for unpacked data */
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
   double ri,rq,rii,rqq,riq;/* accumulators for statistics */
   double li,lq,lii,lqq,liq;/* accumulators for statistics */
@@ -99,6 +104,7 @@ int main(int argc, char *argv[])
   int parse_all;
   int parse_end;
   int mode;
+  int k;
 
   /* get the command line arguments and open the files */
   processargs(argc,argv,&infile,&outfile,&mode,&parse_all,&parse_end);
@@ -148,9 +154,10 @@ int main(int argc, char *argv[])
   /* allocate storage */
   nsamples = (int) rint(bufsize * smpwd / 4.0);
   buffer = (char *) malloc(bufsize);
-  rcp = (float *) malloc(2 * nsamples * sizeof(float));
-  lcp = (float *) malloc(2 * nsamples * sizeof(float));
-  if (lcp == NULL)
+  rcp = (char *) malloc(2 * nsamples * sizeof(char));
+  lcp = (char *) malloc(2 * nsamples * sizeof(char));
+  fbuffer = (float *) malloc(2 * nsamples * sizeof(float));
+  if (!lcp || !rcp || !fbuffer)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -197,22 +204,24 @@ int main(int argc, char *argv[])
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  break;
 	case 5:
-	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+	  unpack_pfs_4c2b_rcp(buffer, rcp, bufsize);
+	  unpack_pfs_4c2b_lcp(buffer, lcp, bufsize);
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
 	  break;
 	case 6:
-	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+	  unpack_pfs_4c4b_rcp(buffer, rcp, bufsize);
+	  unpack_pfs_4c4b_lcp(buffer, lcp, bufsize);
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
 	  break;
 	case 8: 
-	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  memcpy (rcp, buffer, bufsize);
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  break;
 	case 32: 
-	  memcpy(rcp,buffer,bufsize);
-	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  memcpy (fbuffer, buffer, bufsize);
+	  floatsum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  break;
 	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
 	}
@@ -326,7 +335,27 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	sum								      */
 /******************************************************************************/
-void sum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
+void sum(char *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
+{
+  int k;
+
+  /* sum Is and Qs */
+  for (k = 0; k < 2*nsamples; k += 2)
+    {
+      *i  += inbuf[k];
+      *q  += inbuf[k+1];
+      *iq += inbuf[k] * inbuf[k+1];
+      *ii += inbuf[k] * inbuf[k];
+      *qq += inbuf[k+1] * inbuf[k+1];
+    }
+
+  return;
+}    
+
+/******************************************************************************/
+/* floatsum								      */
+/******************************************************************************/
+void floatsum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
 {
   int k;
 
