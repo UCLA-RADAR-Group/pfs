@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.0  2002/04/27 08:01:04  margot
+   Variety of changes to accomodate POSIX threads and multiple output files.
+
    Revision 1.4  2000/11/01 02:17:42  margot
    Replaced -mode with -m for consistency.
 
@@ -112,7 +115,7 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int pack;
 } radar;
 
-#define AMEG (1024*1024)	/* default size of edt ring buffer */
+#define AMEG (1000*1000)	/* default size of edt ring buffer */
 #define RINGBUFS  64		/* default number of one meg edt ring buffers */
 #define SECS   9000		/* default number of seconds to take */
 #define AFEWSECS  3		/* interval bw key pressed and toggle EDT bit */
@@ -135,7 +138,7 @@ int main(int argc, char *argv[])
   int time_set = 0;
 
   long long size;
-  long  lcode = 63, lfft = 1024;
+  long  lcode = 7812500, lfft = 128;
 
 #ifdef TIMER
   struct timeval   now;
@@ -241,7 +244,13 @@ int main(int argc, char *argv[])
         fprintf(stderr, "bad value for -code\n");
         pusage();
       }
-    }       
+    }  else if( strncasecmp( p, "-fft", strlen(p) ) == 0 ) {
+      p = argv[++i];
+      if(( lfft = atoi(p))<=0 ) {
+        fprintf(stderr, "bad value for -fft\n");
+        pusage();
+      }
+    }
   }
 
   /* set maximum size of individual datafiles */
