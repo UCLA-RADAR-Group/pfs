@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.12  2002/12/28 07:42:59  cvs
+   Added capability to swap I and Q prior to FFT.
+
    Revision 1.11  2002/06/05 16:55:10  cvs
    Corrected one error message.
 
@@ -108,13 +111,12 @@ int main(int argc, char *argv[])
   int mode;
   int bufsize;		/* size of read buffer */
   char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
+  char *rcp;		/* buffer for unpacked data */
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
 
-  float *outbuf;
-  float *fftbuf;
+  float *fftinbuf, *fftoutbuf;
   float *total;
 
   float freq;		/* frequency */
@@ -140,6 +142,7 @@ int main(int argc, char *argv[])
 
   fftw_plan p;
   int i,j,k,l,n;
+  short x;
 
   /* get the command line arguments */
   processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB);
@@ -176,7 +179,7 @@ int main(int argc, char *argv[])
   /* compute transform parameters */
   fftlen = (int) rint(fsamp / freqres * 1e6);
   bufsize = fftlen * 4 / smpwd; 
-  if (downsample) fftlen = fftlen / downsample;
+  fftlen = fftlen / downsample;
 
   /* compute fft plan and allocate storage */
   p = fftw_create_plan(fftlen, FFTW_FORWARD, FFTW_ESTIMATE);
@@ -194,12 +197,12 @@ int main(int argc, char *argv[])
     
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
-  buffer = (char *)  malloc(bufsize);
-  fftbuf = (float *) malloc(2 * fftlen * sizeof(float));
-  total  = (float *) malloc(fftlen * sizeof(float));
-  rcp = (float *) malloc(2 * nsamples * sizeof(float));
-  lcp = (float *) malloc(2 * nsamples * sizeof(float));
-  if (!lcp)
+  buffer    = (char *)  malloc(bufsize);
+  fftinbuf  = (float *) malloc(2 * fftlen * sizeof(float));
+  fftoutbuf = (float *) malloc(2 * nsamples * sizeof(float));
+  total = (float *) malloc(fftlen * sizeof(float));
+  rcp   = (char *)  malloc(2 * nsamples * sizeof(char));
+  if (!buffer || !fftinbuf || !fftoutbuf || !total || !rcp)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -213,17 +216,17 @@ int main(int argc, char *argv[])
   for (i = 0; i < sum; i++)
     {
       /* initialize fft array to zero */
-      zerofill(fftbuf, 2 * fftlen);
+      zerofill(fftinbuf, 2 * fftlen);
       
       /* read one data buffer       */
       if (bufsize != read(fdinput, buffer, bufsize))
 	{
-	  fprintf(stderr,"Read error or EOF\n");
+	  fprintf(stderr,"Read error or EOF %d\n");
 	  if (timeseries) fprintf(stderr,"Wrote %d transforms\n",counter);
 	  exit(1);
 	}
 
-      /* unpack it */
+      /* unpack */
       switch (mode)
 	{
 	case 1:
@@ -236,52 +239,56 @@ int main(int argc, char *argv[])
 	  unpack_pfs_2c8b(buffer, rcp, bufsize);
 	  break;
 	case 5:
-	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
+	  if (chan == 2) unpack_pfs_4c2b_lcp (buffer, rcp, bufsize);
+	  else 		 unpack_pfs_4c2b_rcp (buffer, rcp, bufsize);
 	  break;
 	case 6: 
-	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
+	  if (chan == 2) unpack_pfs_4c4b_lcp (buffer, rcp, bufsize);
+	  else 		 unpack_pfs_4c4b_rcp (buffer, rcp, bufsize);
 	  break;
      	case 8: 
-	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  memcpy (rcp, buffer, bufsize);
 	  break;
-     	case 16: 
-	  unpack_pfs_signed16bits(buffer, rcp, bufsize);
+	case 16: 
+	  for (i = 0, j = 0; i < bufsize; i+=sizeof(short), j++)
+	    {
+	      memcpy(&x,&buffer[i],sizeof(short));
+	      fftinbuf[j] = (float) x;
+	    }
 	  break;
      	case 32: 
-	  memcpy(rcp,buffer,bufsize);
+	  memcpy(fftinbuf,buffer,bufsize);
 	  break;
 	default: 
 	  fprintf(stderr,"Mode not implemented yet\n"); 
 	  exit(-1);
 	}
-      
-      /* downsample if needed */
-      if (downsample)
+
+      /* downsample */
+      if (mode != 16 && mode != 32)
 	for (k = 0, l = 0; k < 2*fftlen; k += 2, l += 2*downsample)
-	  for (j = 0; j < 2*downsample; j+=2)
-	    {
-	      fftbuf[k]   += rcp[l+j];
-	      fftbuf[k+1] += rcp[l+j+1];
-	    }
-      else
-	memcpy(fftbuf,rcp,2*fftlen*sizeof(float));
+	  {
+	    for (j = 0; j < 2*downsample; j+=2)
+	      {
+		fftinbuf[k]   += (float) rcp[l+j];
+		fftinbuf[k+1] += (float) rcp[l+j+1];
+	      }
+	  }
 
       /* transform, swap, and compute power */
-      if (invert) swap_iandq(fftbuf,fftlen); 
-      fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)rcp);
-      if (swap) swap_freq(rcp,fftlen); 
-      vector_power(rcp,fftlen);
-
+      if (invert) swap_iandq(fftinbuf,fftlen); 
+      fftw_one(p, (fftw_complex *)fftinbuf, (fftw_complex *)fftoutbuf);
+      if (swap) swap_freq(fftoutbuf,fftlen); 
+      vector_power(fftoutbuf,fftlen);
+      
       /* sum transforms */
       for (j = 0; j < fftlen; j++)
-	total[j] += rcp[j];
+	total[j] += fftoutbuf[j];
     }
   
   /* set DC to average of neighboring values  */
   total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2; 
-
+  
   /* compute rms if needed */
   if (rmsmin != 0 || rmsmax != 0)
     {
@@ -316,28 +323,21 @@ int main(int argc, char *argv[])
       counter++;
       goto loop;
     }
+  /* or standard output */
   /* or limited frequency range */
   else
-    if (freqmin !=0 || freqmax != 0)
-      for (i = 0; i < fftlen; i++)
-	{
+    for (i = 0; i < fftlen; i++)
+      {
 	  freq = (i-fftlen/2)*freqres;
-	  if (freq >= freqmin && freq <= freqmax) 
+    
+	  if ((freqmin == 0.0 && freqmax == 0.0) || (freq >= freqmin && freq <= freqmax)) 
+	  {
 	    if (dB)
 	      fprintf(fpoutput,"%.3f %f\n",freq,10*log10((total[i]-mean)/sigma));
 	    else
 	      fprintf(fpoutput,"%.3f %.1f\n",freq,(total[i]-mean)/sigma);  
-	}
-  /* or standard output */
-    else
-      for (i = 0; i < fftlen; i++)
-	{
-	  freq = (i-fftlen/2)*freqres;
-	  if (dB)
-	    fprintf(fpoutput,"%.3f %f\n",freq,10*log10((total[i]-mean)/sigma));
-	  else
-	    fprintf(fpoutput,"%.3f %.1f\n",freq,(total[i]-mean)/sigma);  
-	}
+	  }
+      }
   
   return 0;
 }
@@ -388,7 +388,7 @@ int     *dB;
   *mode  = 0;                /* default value */
   *fsamp = 0;
   *freqres = 1;
-  *downsample = 0;
+  *downsample = 1;
   *sum = 1;
   *timeseries = 0;
   *chan = 1;
@@ -506,6 +506,12 @@ int     *dB;
       exit(1);
     }
 
+  if (*downsample > 1 && (*mode == 16 || *mode == 32)) 
+    {
+      fprintf(stderr,"Cannot have -d with modes 16 or 32 yet\n");
+      exit (1);
+    }
+
   return;
 
   /* here if illegal option or argument */
@@ -548,16 +554,14 @@ char	command_line[];		/* command line parameters in single string */
   /* copys the command line parameters in argv to the single string
      command line
   */
-  char 	*result;
   int	i;
 
-  result = strcpy(command_line,argv[0]);
-  result = strcat(command_line," ");
+  command_line[0] = '\n';
 
-  for (i=1; i<argc; i++)
+  for (i=0; i<argc; i++)
   {
-    result = strcat(command_line,argv[i]);
-    result = strcat(command_line," ");
+    strcat (command_line, argv[i]);
+    strcat (command_line, " ");
   }
 
   return;
