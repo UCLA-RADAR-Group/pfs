@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2001/07/06 19:46:23  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -32,7 +35,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+
 #include "unpack.h"
 
 /* revision control variable */
@@ -56,9 +62,10 @@ void iq_downsample(float *inbuf, int nsamples, int downsample, float maxvalue, f
 
 int main(int argc, char *argv[])
 {
-  int mode;
-  char *buffer;
-  float *rcp,*lcp;
+  struct stat filestat;	/* input file status structure */
+  int mode;		/* data acquisition mode */
+  char *buffer;		/* buffer for packed data */
+  float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   float maxunpack;	/* maximum unpacked value from libunpack */
@@ -90,6 +97,13 @@ int main(int argc, char *argv[])
   if((fdinput = open(infile, open_flags)) < 0 )
     perror("open input file");
 
+  /* get file status */
+  if (fstat (fdinput, &filestat) < 0)
+    {
+      perror("input file status");
+      exit(1);
+    }
+
   switch (mode)
     {
     case -1:  smpwd = 8; maxunpack =   +3; break;  
@@ -101,16 +115,34 @@ int main(int argc, char *argv[])
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
-  /* compute buffer size and other parameters */
-  fprintf(stderr,"Downsampling by %d\n",downsample);
-  bufsize = 8192 * downsample * 4 / smpwd; 
+  /* compute dynamic range parameters */
+  fprintf(stderr,"Downsampling file of size %d by %d\n",filestat.st_size,downsample);
   maxvalue = maxunpack * sqrt(downsample);
   scale = fudge * 0.25 * 128 / maxvalue;
 
-  if (maxvalue > 255)
+  if (!floats && maxvalue > 255)
     {
       fprintf(stderr,"You may have a dynamic range problem\n");
+      fprintf(stderr,"Turning verbose mode on so you can detect clipping\n");
+      verbose = 1;
     }
+
+  /* compute buffer size */
+  /* we need something of order a Megabyte, multiple of the downsampling factor */
+  /* and ideally consistent with the input file size */
+  bufsize = (int) rint(1000000/downsample) * downsample;
+
+  if (filestat.st_size % downsample != 0)
+    fprintf(stderr,"This may leave the last buffer truncated\n",
+	    filestat.st_size,downsample);
+  else
+    /* if the filesize is a multiple of the downsampling factor, */
+    /* we try to choose a buffer size that will fit nicely as well */
+    while (filestat.st_size % bufsize != 0)
+      bufsize -= downsample;
+  fprintf(stderr,"Using %d buffers of size of %d\n", 
+	  filestat.st_size / bufsize, bufsize);
+  
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
@@ -146,6 +178,11 @@ int main(int argc, char *argv[])
 	  break;
 	case 5:
 	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
+	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq); 
+	  break;
+	case 6:
+	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
 	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
 	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq); 
 	  break;
@@ -338,7 +375,7 @@ float   *fudge;
     *infile = argv[arg_count];
 
   /* must specify a valid mode and downsampling factor */
-  if (*mode == 0 || *downsample == 0) goto errout;
+  if (*mode == 0 || *downsample < 1) goto errout;
   
   return;
 
