@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.6  2001/07/06 19:48:11  margot
+   Added -s option for scaling to sigmas.
+
    Revision 1.5  2001/07/06 04:25:28  margot
    Added mode 32 for "unpacking" of 4 byte floating point quantities.
 
@@ -147,6 +150,7 @@ int main(int argc, char *argv[])
     case   5: smpwd = 4; break;
     case   6: smpwd = 2; break;
     case   8: smpwd = 2; break; 
+    case  16: smpwd = 1; break; 
     case  32: smpwd = 0.5; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
@@ -227,6 +231,9 @@ int main(int argc, char *argv[])
      	case 8: 
 	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
 	  break;
+     	case 16: 
+	  unpack_pfs_signed16bits(buffer, rcp, bufsize);
+	  break;
      	case 32: 
 	  memcpy(rcp,buffer,bufsize);
 	  break;
@@ -286,6 +293,7 @@ int main(int argc, char *argv[])
   /* either time series */
   if (timeseries)
     {
+      for (i = 0; i < fftlen; i++) total[i] = (total[i]-mean)/sigma;
       if (fftlen != fwrite(total,sizeof(float),fftlen,fpoutput))
 	fprintf(stderr,"Write error\n");
       fflush(fpoutput);
