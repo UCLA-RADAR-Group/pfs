@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 1.6  2002/04/27 20:22:26  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.5  2001/07/10 00:37:54  margot
    Adjusted input buffer size according to file size.
 
@@ -161,7 +164,7 @@ int main(int argc, char *argv[])
       break;
     case 3: 
       unpack_pfs_2c8b(buffer, rcp, bufsize);
-      iq_hist(rcp, nsamples, levels);
+      iq_hist_8b(rcp, nsamples, levels);
       break;
     case 5:
       unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
@@ -235,10 +238,6 @@ void iq_hist_8b(float *inbuf, int nsamples, int levels)
   int qhist[levels];
 
   int k;
-
-  fprintf(stderr,"levels %d\n",levels); 
-
-
 
   /* initialize */  
   for (k = 0; k < levels; k++)
