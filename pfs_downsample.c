@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.8  2002/05/26 05:07:11  cvs
+   Better scheme for handling short buffers, including those at end of file.
+
    Revision 1.7  2002/05/26 00:43:13  cvs
    Added mode 32 for downsampling floats.
 
@@ -187,6 +190,7 @@ int main(int argc, char *argv[])
 	{
 	  bufsize = bytesread;
 	  nsamples = (int) rint(bufsize * smpwd / 4.0);
+	  fprintf(stderr,"And one buffer of size %d\n",bufsize);
 	}
  
       /* unpack and downsample */
