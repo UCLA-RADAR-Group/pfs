@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.5  2002/05/26 04:21:42  cvs
+   Better scheme for handling short buffers, including those at end of file.
+
    Revision 2.4  2002/05/26 03:59:18  cvs
    Removed write statement unintentionally left over from earlier revision.
 
@@ -222,6 +225,7 @@ int main(int argc, char *argv[])
       /* optionally compute magnitude */
       if (detect)
 	{
+	  outbufsize = nsamples * sizeof(float);
 	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
 	    rcp[i] = sqrt(rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1]);
 	}
@@ -238,16 +242,8 @@ int main(int argc, char *argv[])
 	}
       else
 	{
-	  if (!detect)
-	    {
-	      if (outbufsize != write(fdoutput,rcp,outbufsize))
-		fprintf(stderr,"Write error\n");  
-	    }
-	  else
-	    {
-	      if (outbufsize/2 != write(fdoutput,rcp,outbufsize/2))
-		fprintf(stderr,"Write error\n");  
-	    }
+	  if (outbufsize != write(fdoutput,rcp,outbufsize))
+	    fprintf(stderr,"Write error\n");  
 	}
     }
 
