@@ -21,6 +21,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2000/10/30 05:20:46  margot
+   Added variable nsamples.
+
    Revision 1.1  2000/10/30 04:45:22  margot
    Initial revision
 
@@ -49,7 +52,7 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void iq_stats(float *inbuf, int nsamples);
+void iq_stats(float *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
 {
@@ -59,6 +62,7 @@ int main(int argc, char *argv[])
   float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
+  int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
   int parseall;
   int i;
@@ -83,12 +87,12 @@ int main(int argc, char *argv[])
 
   switch (mode)
     {
-    case -1: smpwd = 8; break;  
-    case  1: smpwd = 8; break;
-    case  2: smpwd = 4; break;
-    case  3: smpwd = 2; break; 
-    case  5: smpwd = 4; break;
-    case  6: smpwd = 2; break;
+    case -1: smpwd = 8; levels =   4; break;  
+    case  1: smpwd = 8; levels =   4; break;
+    case  2: smpwd = 4; levels =  16; break;
+    case  3: smpwd = 2; levels = 256; break; 
+    case  5: smpwd = 4; levels =   4; break;
+    case  6: smpwd = 2; levels =  16; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -111,33 +115,33 @@ int main(int argc, char *argv[])
     { 
     case -1:
       unpack_gsb(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       break;
     case 1:
       unpack_pfs_2c2b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       break;
     case 2: 
       unpack_pfs_2c4b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       break;
     case 3: 
       unpack_pfs_2c8b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       break;
     case 5:
       unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, nsamples);
+      iq_stats(lcp, nsamples, levels);
       break;
     case 6:
       unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, nsamples);
+      iq_stats(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, nsamples);
+      iq_stats(lcp, nsamples, levels);
       break;
 
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
@@ -149,7 +153,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	iq_stats							      */
 /******************************************************************************/
-void iq_stats(float *inbuf, int nsamples)
+void iq_stats(float *inbuf, int nsamples, int levels)
 {
   double i=0;
   double q=0;
@@ -181,9 +185,19 @@ void iq_stats(float *inbuf, int nsamples)
   ii = sqrt(ii - i*i);
   qq = sqrt(qq - q*q);
 
+  fprintf(fpoutput,"In digitizer counts (x2):\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
   fprintf(fpoutput,"% 10.4f % 10.4f ",i,ii);
   fprintf(fpoutput,"% 10.4f % 10.4f ",q,qq);
   fprintf(fpoutput,"% 10.4f ",fabs(iq - i*q)/ii/qq);
+  fprintf(fpoutput,"\n"); 
+
+  /* convert to volts */
+  /* AD range is 1 Vpp */
+  fprintf(fpoutput,"In Volts:\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+  fprintf(fpoutput,"% 10.4f % 10.4f ",i/levels/2.0,ii/levels/2.0);
+  fprintf(fpoutput,"% 10.4f % 10.4f ",q/levels/2.0,qq/levels/2.0);
   fprintf(fpoutput,"\n"); 
 
   return;
