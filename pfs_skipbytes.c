@@ -8,7 +8,7 @@
 *  usage:
 *  	pfs_skipbytes  -b nbytes [-n nreads] 
 *                     [-s nskipbuffs,nskipbytes] 
-*                     [-r startbyte,stopbyte]
+*                     [-r startbyte,stopbyte (zero-based)]
 *                     [-o outfile] infile
 *
 *  input:
@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2002/04/27 20:26:00  margot
+   Changed location of include file for O_LARGEFILE
+
    Revision 1.1  2002/04/27 06:26:37  margot
    Initial revision
 
@@ -174,7 +177,7 @@ int     *stopbyte;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "b:n:s:r:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE="pfs_skipbytes -b nbytes [-n nreads] [-s nskipbuffs,nskipbytes] [-r startbyte,stopbyte] [-o outfile] infile";
+  char *USAGE="pfs_skipbytes -b nbytes [-n nreads] [-s nskipbuffs,nskipbytes] [-r startbyte,stopbyte (zero-based)] [-o outfile] infile";
 
   int  i;
   int  c;			 /* option letter returned by getopt  */
