@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.4  2003/07/03 18:34:52  cvs
+   Changed to one-based convention instead of zero-based convention.
+
    Revision 1.3  2002/05/02 05:50:00  cvs
    Explained zero-based arrays in usage line
 
@@ -156,7 +159,10 @@ int main(int argc, char *argv[])
   while(buffcount < nreads + nskipbuffs)
     {
       if (nbytes != read(fdinput, buffer, nbytes))
-	fprintf(stderr,"Read error\n");
+	{
+	  fprintf(stderr,"Read error or EOF\n");
+	  exit(1);
+	}
       if (1 != fwrite(&buffer[startbyte-1],stopbyte-startbyte+1,1,fpoutput))
 	fprintf(stderr,"Write error!\n"); 
       buffcount++;
