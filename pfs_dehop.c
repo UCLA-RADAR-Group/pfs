@@ -2,6 +2,8 @@
 *  program pfs_dehop
 *  $Id$
 *  This programs dehops spectra obtained with the pfs_fft program
+*  It expects a time series of one or more ffts per dwell time
+*  Input data are assumed to be four byte floating point numbers
 *
 *  usage:
 *  	pfs_dehop
@@ -26,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2001/07/06 19:02:34  margot
+   Simplified adding.
+
    Revision 1.1  2001/07/06 18:54:07  margot
    Initial revision
 
@@ -62,7 +67,9 @@ int main(int argc, char *argv[])
 {
   float *fftbuf;
   float *total;
-  int bufsize;
+  float *baseline;
+  int inbufsize;
+  int outbufsize;
 
   double freq;		/* frequency */
   double fsamp;		/* sampling frequency, KHz */
@@ -77,7 +84,7 @@ int main(int argc, char *argv[])
   int open_flags;	/* flags required for open() call */
   int binary = 1;	/* binary output */
   int inverted = 1;	/* frequency axis inverted */
-  int i,j,k,l;
+  int i,j,k,l,m;	/* indices */
 
   /* get the command line arguments */
   processargs(argc,argv,&infile,&outfile,&fsamp,&freqres,&dwell,&f0,&df,&hops);
@@ -100,27 +107,30 @@ int main(int argc, char *argv[])
 
   /* compute transform parameters */
   fftlen = fsamp * 1e3 / freqres;
-  bufsize = fftlen * sizeof(float); 
+  inbufsize = fftlen * sizeof(float); 
   fftsperhop = dwell * freqres;
   init  = fftlen / 2 + f0 * 1e3 / freqres;
   shift = df * 1e3 / freqres;
+  outbufsize = shift * sizeof(float);
 
   fprintf(stderr,"\n%s\n\n",command_line);
   fprintf(stderr,"FFT length                     : %d\n",fftlen);
   fprintf(stderr,"Frequency resolution           : %e Hz\n",freqres);
   fprintf(stderr,"Processed bandwidth            : %e Hz\n\n",freqres*fftlen);
 
-  fprintf(stderr,"Data required for one transform: %d bytes\n",bufsize);
+  fprintf(stderr,"Data required for one transform: %d bytes\n",inbufsize);
   fprintf(stderr,"Number of ffts per hop         : %d\n",fftsperhop);
   fprintf(stderr,"Data required for one hop seq  : %d bytes\n",
-	  bufsize*fftsperhop*hops);
+	  inbufsize*fftsperhop*hops);
   fprintf(stderr,"Initial location and shift     : %d,%d\n",init,shift);
+  fprintf(stderr,"Dehopped output buffer size    : %d bytes\n",outbufsize);
   fprintf(stderr,"\n");
     
   /* allocate storage */
-  fftbuf = (float *) malloc(bufsize);
-  total  = (float *) malloc(bufsize);
-  if (!total)
+  total    = (float *) malloc(outbufsize);
+  baseline = (float *) malloc(outbufsize);
+  fftbuf   = (float *) malloc(inbufsize);
+  if (!fftbuf)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -128,24 +138,40 @@ int main(int argc, char *argv[])
 
   /* sum transforms */
   zerofill(total, fftlen);
-  /* read one data buffer */
+  /* read data buffers until EOF */
   while (1)
     {
       for (i = 0; i < hops; i++)
 	for (j = 0; j < fftsperhop; j++)
 	  {
-	    if (bufsize != read(fdinput, fftbuf, bufsize))
+	    if (inbufsize != read(fdinput, fftbuf, inbufsize))
 	      goto write;
-	    /* shift to correct location */
-	    if (inverted)
-	      l = init - shift / 2 + (hops-i-1) * shift;
-	    else
-	      l = init - shift / 2 + i * shift; 
-	    /* sum */
-	    for (k = 0; k < shift; k++)
-	      total[k]   += fftbuf[l+k];
+
+	    /* now we split the data array in hop-sized chunks */
+	    /* if data  (k==i), sum in array total */
+	    /* if noise (k!=i), sum in array baseline */
+	    for (k = 0; k < hops; k++)
+	      {
+		/* compute correct shift index location */
+		if (inverted)
+		  l = init - shift / 2 + (hops-k-1) * shift;
+		else
+		  l = init - shift / 2 + k * shift; 
+		/* sum data */
+		if (k == i)
+		  for (m = 0; m < shift; m++)
+		    total[m]    += fftbuf[l+m];
+		/* sum noise */
+		else
+		  for (m = 0; m < shift; m++)
+		    baseline[m] += fftbuf[l+m];
+	      }
 	  }
     }
+
+  /* scale baseline array and subtract */
+  for (m = 0; m < shift; m++)
+    total[m] = total[m] - baseline[m] / (hops - 1);
 
  write:
   /* write output */
@@ -158,7 +184,7 @@ int main(int argc, char *argv[])
     for (i = -shift/2; i < shift/2; i++)
       {
 	freq = i*freqres;
-	fprintf(fpoutput,"%.3f %.0f\n",freq,total[i+shift/2]);
+	fprintf(fpoutput,"%.3f %.2f\n",freq,total[i+shift/2]);
       }
 
   return 0;
