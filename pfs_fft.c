@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.10  2002/05/12 13:36:02  cvs
+   Cosmetic changes.
+
    Revision 1.9  2002/05/02 05:48:59  cvs
    Mode added to usage line
 
@@ -488,7 +491,7 @@ int     *dB;
     }
   if (*timeseries && (*freqmin != 0 || *freqmax !=0)) 
     {
-      fprintf(stderr,"Cannot have -t and -l simultaneously yet\n");
+      fprintf(stderr,"Cannot have -t and -x simultaneously yet\n");
       exit(1);
     }
   if (*timeseries && (*rmsmin != 0 || *rmsmax !=0)) 
