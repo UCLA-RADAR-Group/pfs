@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2002/04/27 06:13:14  margot
+   Now exits if input file cannot be opened.
+
    Revision 1.2  2001/07/10 01:43:35  margot
    Added check on file size and compared to downsampling factor
    and input buffer size.
@@ -38,7 +41,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <asm/fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -172,10 +175,6 @@ int main(int argc, char *argv[])
       /* unpack and downsample */
       switch (mode)
 	{
-	case -1:
-	  unpack_gsb(buffer, rcp, bufsize); 
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
-	  break;
 	case 1:
 	  unpack_pfs_2c2b(buffer, rcp, bufsize); 
 	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
@@ -312,7 +311,7 @@ float   *fudge;
 
   char *myoptions = "m:o:d:c:s:I:Q:f"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s scale fudge factor] [-f output floating point numbers] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
-  char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
+  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 

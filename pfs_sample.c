@@ -19,6 +19,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2002/04/27 06:44:07  margot
+   Updated device filename.
+
    Revision 1.1  2002/04/27 06:25:21  margot
    Initial revision
 
@@ -29,7 +32,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "edt.h"
 #include "edtinc.h"
 #include "unpack.h"
 
@@ -55,7 +57,6 @@ int main(int argc, char *argv[])
   int mode;
   int bufsize = 1048576; /* 1048576 size of read buffer, default 1 MB */
   unsigned char *buffer;		/* buffer for packed data */
-  long *gsb_buf;
   float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
@@ -88,7 +89,6 @@ int main(int argc, char *argv[])
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer = NULL;
-  gsb_buf = (long *) malloc(bufsize / 4);
   rcp = (float *) malloc(2 * nsamples * sizeof(float));
   lcp = (float *) malloc(2 * nsamples * sizeof(float));
   if (lcp == NULL)
@@ -135,15 +135,6 @@ int main(int argc, char *argv[])
 
       switch (mode)
 	{
-	case -1:
-	  pack_gsb(buffer, gsb_buf, bufsize);
-	  unpack_gsb((char *)gsb_buf, rcp, bufsize/4);
-	  if (printall)
-	    for (i = 0; i < bufsize; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
-	  else
-	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
-	  break;
 	case 1:
   	  unpack_pfs_2c2b(buffer, rcp, bufsize);
 	  if (printall)
@@ -220,7 +211,7 @@ int     *printall;
 
   char *myoptions = "m:o:p"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_sample -m mode [-p (print all data)] [-o outfile] [infile] ";
-  char *USAGE2="Valid modes are\n\t -1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
+  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
