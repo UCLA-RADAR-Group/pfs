@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.1  2003/02/25 22:45:34  cvs
+   Sizes of fftinbuf and fftoutbuf must be identical.
+
    Revision 3.0  2003/02/22 07:48:08  cvs
    Switch to Joseph Jao's byte unpacking.
 
@@ -378,7 +381,7 @@ int     *dB;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "m:f:d:r:n:tc:o:lx:s:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -489,24 +492,34 @@ int     *dB;
     *infile = argv[arg_count];
 
   /* must specify a valid mode */
-  if (*mode == 0) goto errout;
+  if (*mode == 0)
+    {
+      fprintf(stderr,"Must specify sampling mode\n");
+      goto errout;
+    }
+  /* must specify a valid sampling frequency */
+  if (*fsamp == 0) 
+    {
+      fprintf(stderr,"Must specify sampling frequency\n");
+      goto errout;
+    }
   /* must specify a valid channel */
   if (*chan != 1 && *chan != 2) goto errout;
   /* some combinations not implemented yet */
   if (*timeseries && *dB) 
     {
       fprintf(stderr,"Cannot have -t and -l simultaneously yet\n");
-      exit(1);
+      goto errout;
     }
   if (*timeseries && (*freqmin != 0 || *freqmax !=0)) 
     {
       fprintf(stderr,"Cannot have -t and -x simultaneously yet\n");
-      exit(1);
+      goto errout;
     }
   if (*timeseries && (*rmsmin != 0 || *rmsmax !=0)) 
     {
       fprintf(stderr,"Cannot have -t and -s simultaneously yet\n");
-      exit(1);
+      goto errout;
     }
 
   if (*downsample > 1 && (*mode == 16 || *mode == 32)) 
