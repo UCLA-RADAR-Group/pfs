@@ -5,11 +5,13 @@
 *  and prints and histogram of count values for all channels
 *
 *  usage:
-*  	pfs_hist -m mode [-a (parse all data)] [-o outfile] [infile]
+*  	pfs_hist -m mode [-a (parse all data)] [-e (parse data at eof)] 
+*               [-o outfile] [infile]
 *
 *  input:
 *       the input parameters are typed in as command line arguments
 *	the -m option specifies the data acquisition mode
+*	the -e option specifies to parse data at the end of the file
 *	the -a option specifies to parse all the data recorded
 *                     (default is to parse the first megabyte)
 *
@@ -20,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2000/10/30 05:21:41  margot
+   Added variable nsamples.
+
    Revision 1.1  2000/10/30 04:46:22  margot
    Initial revision
 
@@ -61,11 +66,12 @@ int main(int argc, char *argv[])
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
-  int parseall;
+  int parse_all;
+  int parse_end;
   int i;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&parseall);
+  processargs(argc,argv,&infile,&outfile,&mode,&parse_all,&parse_end);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -104,10 +110,16 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
+  if (parse_end)
+    lseek(fdinput, -bufsize, SEEK_END);
+
   /* read first buffer */
   if (bufsize != read(fdinput, buffer, bufsize))
-    fprintf(stderr,"Read error\n");
-  
+    {
+      fprintf(stderr,"Read error\n");
+      exit(1);
+    }  
+
   switch (mode)
     { 
     case -1:
@@ -195,6 +207,10 @@ void iq_hist_8b(float *inbuf, int nsamples, int levels)
 
   int k;
 
+  fprintf(stderr,"levels %d\n",levels); 
+
+
+
   /* initialize */  
   for (k = 0; k < levels; k++)
     ihist[k] = qhist[k] = 0;
@@ -221,13 +237,14 @@ void iq_hist_8b(float *inbuf, int nsamples, int levels)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,parseall)
+void	processargs(argc,argv,infile,outfile,mode,parse_all,parse_end)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
 char	**outfile;		 /* output file name */
 int     *mode;
-int     *parseall;
+int     *parse_all;
+int     *parse_end;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_hist program:
@@ -240,8 +257,8 @@ int     *parseall;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:a"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_hist -m mode [-a (parse all data)] [-o outfile] [infile] ";
+  char *myoptions = "m:o:ae"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_hist -m mode [-e (parse data at eof)] [-a (parse all data)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -252,7 +269,8 @@ int     *parseall;
   *outfile = "-";
 
   *mode  = 0;                /* default value */
-  *parseall = 0;
+  *parse_all = 0;
+  *parse_end = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -270,7 +288,12 @@ int     *parseall;
 	       break;
 	    
       case 'a':
- 	       *parseall = 1;
+ 	       *parse_all = 1;
+               arg_count += 1;
+	       break;
+	    
+      case 'e':
+ 	       *parse_end = 1;
                arg_count += 1;
 	       break;
 	    
@@ -287,7 +310,7 @@ int     *parseall;
   if (*mode == 0) goto errout;
   
   /* code still in development */
-  if (*parseall)
+  if (*parse_all)
     {
       fprintf(stderr,"-a option not implemented yet\n"); 
       exit(1);
