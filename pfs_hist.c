@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2001/07/10 00:18:39  margot
+   Added -e option for parsing at end of file.
+
    Revision 1.2  2000/10/30 05:21:41  margot
    Added variable nsamples.
 
@@ -86,7 +89,10 @@ int main(int argc, char *argv[])
   open_flags = O_RDONLY;
 #endif
   if((fdinput = open(infile, open_flags)) < 0 )
-    perror("open input file");
+    {
+      perror("open input file");
+      exit(1);
+    }
 
   switch (mode)
     {
@@ -96,15 +102,16 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; levels = 256; break; 
     case  5: smpwd = 4; levels =   4; break;
     case  6: smpwd = 2; levels =  16; break;
+    case  8: smpwd = 2; levels = 256; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
+  buffer = (char *) malloc(bufsize);
   rcp = (float *) malloc(2 * nsamples * sizeof(float));
   lcp = (float *) malloc(2 * nsamples * sizeof(float));
-  buffer = (char *) malloc(bufsize);
-  if (buffer == NULL) 
+  if (lcp == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -151,6 +158,10 @@ int main(int argc, char *argv[])
       iq_hist(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP hist\n");
       iq_hist(lcp, nsamples, levels);
+      break;
+    case 8: 
+      unpack_pfs_signedbytes(buffer, rcp, bufsize);
+      iq_hist_8b(rcp, nsamples, levels);
       break;
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
     }
