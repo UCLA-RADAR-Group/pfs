@@ -26,6 +26,11 @@
 
 /* 
    $Log$
+   Revision 3.1  2003/04/21 20:30:13  cvs
+   Added option to skip a number of samples at the beginning of a file.
+   Re-organized command-line options -b, -f, -s.
+   Default output is now floating point numbers.
+
    Revision 3.0  2003/02/22 02:29:18  cvs
    Very extensive surgery by Joseph Jao for faster processing.
    Threads are used to read and process in parallel mode.
@@ -531,7 +536,7 @@ int 	*samplestoskip;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:d:c:s:I:Q:b:f"; 	 /* options to search for :=> argument*/
+  char *myoptions = "m:o:d:c:s:I:Q:bf:"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
