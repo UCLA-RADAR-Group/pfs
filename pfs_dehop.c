@@ -26,6 +26,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2001/07/06 18:54:07  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -134,16 +137,13 @@ int main(int argc, char *argv[])
 	    if (bufsize != read(fdinput, fftbuf, bufsize))
 	      goto write;
 	    /* shift to correct location */
-	    /* for (k = 0; k < shift; k++, l++) */
+	    if (inverted)
+	      l = init - shift / 2 + (hops-i-1) * shift;
+	    else
+	      l = init - shift / 2 + i * shift; 
+	    /* sum */
 	    for (k = 0; k < shift; k++)
-	      {
-		if (inverted)
-		  l = k + init - shift / 2 + (hops-i-1) * shift;
-		else
-		  l = k + init - shift / 2 + i * shift; 
-
-		total[k]   += fftbuf[l];
-	      }
+	      total[k]   += fftbuf[l+k];
 	  }
     }
 
