@@ -30,6 +30,17 @@
 
 /* 
    $Log$
+   Revision 1.2  2000/10/30 04:32:32  margot
+   Fixed three bugs corresponding to gsb_radar revisions 2.2 -> 2.4
+   1) thr_join() did not join on previous diskwrite thread.
+   Fixed bug by adding diskwrite structure wlast.
+   2) Removed all instances of diskbufs and made number of disk write buffers
+   equal to number of input ring buffers.  Previously there was a correspondence
+   between the number of output files and the number of disk write buffers,
+   with unwanted results when specifying a single output file.
+   3) Fixed bug in requirement for write buffers to be multiples of
+   pagesize for mlock().
+
    Revision 1.1  2000/07/20 21:12:07  margot
    Initial revision
 
@@ -68,7 +79,7 @@ struct RADAR { /* structure that holds the buffers and configuration */
   EdtDev *edt;
   unsigned int mode;
   int ameg;
-  int twensec;
+  int secs;
   int step;
   int cycles;
   int ringbufs;
@@ -76,8 +87,9 @@ struct RADAR { /* structure that holds the buffers and configuration */
   struct DISKWRITE *dw;
   unsigned short **rings;
   time_t start;
-  time_t startmone;
+  time_t stop;
   time_t next;
+  time_t startmone;
   char timestr[80];
   char log[80];
   FILE *logfd;
@@ -89,10 +101,10 @@ struct DIRLIST {
   char name[80];
 };
 
-#define AMEG (1024*1024) /* default size of edt ring buffer */
-#define RINGBUFS  8      /* default number of one meg edt ring buffers */
-#define TWENSECS  3600   /* default number of seconds to take */
-#define AFEWSECS  3      /* interval bw key pressed and toggle EDT bit */
+#define AMEG (1024*1024)	/* default size of edt ring buffer */
+#define RINGBUFS  8		/* default number of one meg edt ring buffers */
+#define SECS   3600		/* default number of seconds to take */
+#define AFEWSECS  3		/* interval bw key pressed and toggle EDT bit */
 
 int ctlc_flag = 0;
 
@@ -102,7 +114,7 @@ int main(int argc, char *argv[])
   unsigned char *p;
   struct DISKWRITE *w;
   struct DISKWRITE *wlast;
-  int dcount, twensec;
+  int dcount;
   void *disk_write();
   struct RADAR *r;
   struct DIRLIST *dirhead, *dir;
@@ -122,7 +134,7 @@ int main(int argc, char *argv[])
   r->ringbufs = RINGBUFS;
   r->ameg = AMEG;
   r->pack = 1;
-  r->twensec = 20 * TWENSECS;
+  r->secs = SECS;
   r->step = 0;
   r->cycles = 1;
   w = NULL;
@@ -132,7 +144,7 @@ int main(int argc, char *argv[])
     p = argv[i];
     if( strncasecmp( p, "-secs", strlen(p) ) == 0 ) {
       p = argv[++i];
-      if( (r->twensec = atoi(p)*20)<=0 ) {
+      if( (r->secs = atoi(p))<=0 ) {
         fprintf(stderr, "bad value for -secs\n");
         pusage();
       }
@@ -209,7 +221,7 @@ int main(int argc, char *argv[])
     default: fprintf(stderr,"invalid mode\n"); pusage();
     }
 
-  if (r->cycles > 1 && r->step < r->twensec / 20 + AFEWSECS)
+  if (r->cycles > 1 && r->step < r->secs + AFEWSECS)
     {
       fprintf(stderr,"Step size must be bigger than duration of A/D\n");
       exit(1);
@@ -279,6 +291,7 @@ int main(int argc, char *argv[])
     {
       /* define start times for this cycle and the next */
       r->start = r->next;
+      r->stop  = r->start + r->secs;
       r->startmone = r->start - 1;
       r->next = r->start + r->step;
 
@@ -314,10 +327,11 @@ int main(int argc, char *argv[])
 #endif
 
       /* main loop */
-      twensec = r->twensec;
       dcount = 0;
-      for( i=0; i<twensec; i++ ) {
+      for( i=0; ; i++ ) {
 	if( ctlc_flag )
+	  break;
+	if (time(NULL) >= r->stop)
 	  break;
 	if(!(p = edt_wait_for_buffers( r->edt, 1)))
 	  printf("error \n");
@@ -589,7 +603,7 @@ struct RADAR *r;
   fprintf(r->logfd, "%s\n",rcsid);
   fprintf(r->logfd, "Input buffer size %d bytes\n", r->ameg );
   fprintf(r->logfd, "Input buffers, %d\n", r->ringbufs );
-  fprintf(r->logfd, "Maximum time %d seconds\n", r->twensec/20 );
+  fprintf(r->logfd, "Data taking duration %d seconds\n", r->secs );
   fprintf(r->logfd, "Write buffers, %d\n", r->ringbufs );
   fprintf(r->logfd, "Data taking mode, %d\n", r->mode );
   fflush(r->logfd);
