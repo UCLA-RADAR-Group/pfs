@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.10  2002/11/11 18:46:33  cvs
+   Multiplied default buffer size by two.
+
    Revision 1.9  2002/06/05 16:54:38  cvs
    Added info on last buffer size.
 
@@ -70,40 +73,60 @@
 static char const rcsid[] = 
 "$Id$";
 
-FILE   *fpoutput;		/* pointer to output file */
-int	fdinput;		/* file descriptor for input file */
-
-char   *outfile;		/* output file name */
-char   *infile;		        /* input file name */
+int	fdinput;		/* file descriptor for input file */ 
+int	fdoutput;		/* file descriptor to output file */
 
 char	command_line[200];	/* command line assembled by processargs */
-int verbose = 0;
-int floats  = 0;
+int	verbose = 0;
+int	floats  = 0;
+int	downsample;	/* factor by which to downsample */
+int     nsamples; 	/* # of complex samples in each buffer */
+float	smpwd;		/* # of single pol complex samples in a 4 byte word */
+
+int	mode;		/* data acquisition mode */
+int     chan;		/* channel to process (1 or 2) for dual pol data */
+int	bufsize;	/* input buffer size */
+float   scale; 		/* scaling factor to fit in a byte */
+float	dcoffi,dcoffq;	/* dc offsets */
+
+
+
+/* for thread ID */
+pthread_t tid[3];
+
+struct jdata {
+    char    *bfrthr1;
+    char    *bfrthr2;
+    char   *chnthr1;
+    char   *chnthr2;
+    int	    bytesread;	/* number of bytes read from input file */
+};
+
+
+void *read_buf(void *rdata);
+void *proc_buf(void *pdata);
+void *iq_downsample (void *pdata);
 
 void processargs();
 void open_file();
 void copy_cmd_line();
-void iq_downsample(float *inbuf, int nsamples, int downsample, float maxvalue, float dcoffi, float dcoffq);
+
 
 int main(int argc, char *argv[])
 {
   struct stat filestat;	/* input file status structure */
-  int mode;		/* data acquisition mode */
-  char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
-  float smpwd;		/* # of single pol complex samples in a 4 byte word */
-  int nsamples;		/* # of complex samples in each buffer */
+  unsigned char *buffer1, *buffer2;		/* buffer for packed data */
+  char *channel1,*channel2;	/* buffer for unpacked data */
   float maxunpack;	/* maximum unpacked value from libunpack */
   float maxvalue;	/* maximum achievable value by downsampling */
-  float scale;		/* scaling factor to fit in a byte */
   float fudge;		/* scale fudge factor */
-  float dcoffi,dcoffq;	/* dc offsets */
-  int bufsize;		/* input buffer size */
-  int bytesread;	/* number of bytes read from input file */
-  int downsample;	/* factor by which to downsample */
-  int chan;		/* channel to process (1 or 2) for dual pol data */
   int open_flags;	/* flags required for open() call */
   int i;
+
+  char   *outfile;	/* output file name */
+  char   *infile;	/* input file name */
+
+  struct jdata cntlbuf;
 
   /* get the command line arguments and open the files */
   processargs(argc,argv,&infile,&outfile,&mode,&downsample,&chan,&dcoffi,&dcoffq,&fudge);
@@ -117,7 +140,8 @@ int main(int argc, char *argv[])
 #else
   open_flags = O_RDONLY;
 #endif
-  if((fdinput = open(infile, open_flags)) < 0 )
+
+  if((fdinput = open(infile, open_flags, O_RDONLY)) < 0 )
     {
       perror("open input file");
       exit(1);
@@ -128,16 +152,21 @@ int main(int argc, char *argv[])
     {
       perror("input file status");
       exit(1);
-    }
-  if (filestat.st_size % 4 != 0)
-    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n",
-	    filestat.st_size);
-  if (filestat.st_size % downsample != 0)
-    fprintf(stderr,"Warning: file size %d is not a multiple of the downsampling factor\n",
-	    filestat.st_size);
+      } 
 
-  /* open output file, stdout default */
-  open_file(outfile,&fpoutput);
+  if (filestat.st_size % 4 != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", filestat.st_size);
+  if (filestat.st_size % downsample != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of the downsampling factor\n", filestat.st_size);
+
+  /* open output file, stdout is default */
+  if (outfile[0] == '-') {
+     fdoutput=1;
+  } else if ((fdoutput = open(outfile, O_RDWR | O_CREAT | O_TRUNC, 0660)) < 0 )
+  {
+     perror("open input file");
+     exit(1);
+  }
 
   switch (mode)
     {
@@ -153,7 +182,7 @@ int main(int argc, char *argv[])
     }
 
   /* compute dynamic range parameters */
-  fprintf(stderr,"Downsampling file of size %d by %d\n",filestat.st_size,downsample);
+  fprintf(stderr,"Downsampling file of size %d KB by %d\n", (int) (filestat.st_size / 1000), downsample);
   maxvalue = maxunpack * sqrt(downsample);
   scale = fudge * 0.25 * 128 / maxvalue;
 
@@ -169,132 +198,257 @@ int main(int argc, char *argv[])
   bufsize = 8 * (int) rint(1000000/downsample) * downsample;
   fprintf(stderr,"Using %d buffers of size %d\n", 
 	  filestat.st_size / bufsize, bufsize);
-  
+
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
-  buffer = (char *) malloc(bufsize);
-  rcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-  lcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-  if (!lcp) fprintf(stderr,"Malloc error\n");
+  buffer1 = (unsigned char *) malloc(bufsize);
+  buffer2 = (unsigned char *) malloc(bufsize);
+
+  /* for mode 32, data buffers are transferred as float. Others use char unpack */
+  if (mode == 32) {
+    channel1 = (char *) malloc(bufsize);
+    channel2 = (char *) malloc(bufsize);
+  } else {
+    channel1 = (char *) malloc(2 * bufsize * smpwd / 4 * sizeof(char));
+    channel2 = (char *) malloc(2 * bufsize * smpwd / 4 * sizeof(char));
+  }
+
+  if (!channel1 || !channel2 || !buffer1 || !buffer2) fprintf(stderr,"Malloc error\n");
 
   if (nsamples % downsample != 0)
     fprintf(stderr,"Warning: # samples per buffer %d, downsampling factor %d\n",
 	    nsamples,downsample);
 
-  /* infinite loop */
-  while (1)
-    {
-      /* read one buffer */
-      bytesread = read(fdinput, buffer, bufsize);
-      /* check for end of file */
-      if (bytesread == 0) break;
-      /* handle small buffers */
-      if (bytesread != bufsize) 
-	{
-	  bufsize = bytesread;
-	  nsamples = (int) rint(bufsize * smpwd / 4.0);
-	  fprintf(stderr,"And one buffer of size %d\n",bufsize);
+    i = 1;
+
+    /* read 1st buffer */
+    cntlbuf.bfrthr1 = buffer1;
+    cntlbuf.chnthr1 = channel1;
+    pthread_create (&tid[0], NULL, read_buf, (void *)&cntlbuf);
+    pthread_join (tid[0], NULL);
+
+    /* read 2nd buffer & process 1st unpacking */
+    cntlbuf.bfrthr1 = buffer2;
+    cntlbuf.chnthr1 = channel2;
+    cntlbuf.bfrthr2 = buffer1;
+    cntlbuf.chnthr2 = channel1;
+    pthread_create (&tid[1], NULL, proc_buf, (void *)&cntlbuf);
+    pthread_create (&tid[0], NULL, read_buf, (void *)&cntlbuf);
+    pthread_join (tid[0], NULL);
+    pthread_join (tid[1], NULL);
+
+    while (1) {
+	/* buffer assignment for parallel processing */
+	if (i++ % 2) {
+	    cntlbuf.bfrthr1 = buffer1;
+	    cntlbuf.chnthr1 = channel1;
+	    cntlbuf.bfrthr2 = buffer2;
+	    cntlbuf.chnthr2 = channel2;
+	} else {
+	    cntlbuf.bfrthr1 = buffer2;
+	    cntlbuf.chnthr1 = channel2;
+	    cntlbuf.bfrthr2 = buffer1;
+	    cntlbuf.chnthr2 = channel1;
 	}
- 
-      /* unpack and downsample */
-      switch (mode)
-	{
-	case 1:
-	  unpack_pfs_2c2b(buffer, rcp, bufsize); 
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
+
+        /* read buffer, process unpacking & downsample */
+        pthread_create (&tid[1], NULL, proc_buf, (void *)&cntlbuf);
+        pthread_create (&tid[0], NULL, read_buf, (void *)&cntlbuf);
+        pthread_create (&tid[2], NULL, iq_downsample, (void *)&cntlbuf);
+
+        pthread_join (tid[1], NULL);
+        pthread_join (tid[0], NULL);
+        pthread_join (tid[2], NULL);
+
+	/* last buffer? */
+	if (cntlbuf.bytesread != bufsize) {
 	  break;
-	case 2: 
-	  unpack_pfs_2c4b(buffer, rcp, bufsize);
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
-	  break;
-	case 3: 
-	  unpack_pfs_2c8b(buffer, rcp, bufsize);
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
-	  break;
-	case 5:
-	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq); 
-	  break;
-	case 6:
-	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
-	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq); 
-	  break;
-     	case 8: 
-	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
-	  break;
-     	case 32: 
-	  memcpy(rcp, buffer, bufsize);
-	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
-	  break;
-	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
 	}
     }
+
+    /* last buffer == empty buffer? */
+    if (cntlbuf.bytesread != 0) {
+	if (i++ % 2) {
+	    cntlbuf.bfrthr1 = buffer1;
+	    cntlbuf.chnthr1 = channel1;
+	    cntlbuf.bfrthr2 = buffer2;
+	    cntlbuf.chnthr2 = channel2;
+	} else {
+	    cntlbuf.bfrthr1 = buffer2;
+	    cntlbuf.chnthr1 = channel2;
+	    cntlbuf.bfrthr2 = buffer1;
+	    cntlbuf.chnthr2 = channel1;
+	}
+
+        /* process unpacking & downsample */
+        pthread_create (&tid[1], NULL, proc_buf, (void *)&cntlbuf);
+        pthread_create (&tid[2], NULL, iq_downsample, (void *)&cntlbuf);
+
+        pthread_join (tid[1], NULL);
+        pthread_join (tid[2], NULL);
+
+        /* prepare to handle small size for the last buffer */
+	bufsize = cntlbuf.bytesread;
+
+	nsamples = (int) rint(bufsize * smpwd / 4.0);
+	fprintf(stderr,"And one buffer of size %d\n", bufsize);
+    }
+
+    /* only process last buffer read size */
+    if (i++ % 2) {
+	cntlbuf.bfrthr1 = buffer1;
+	cntlbuf.chnthr1 = channel1;
+    } else {
+	cntlbuf.bfrthr1 = buffer2;
+	cntlbuf.chnthr1 = channel2;
+    }
+	
+    /* process downsample only */
+    pthread_create (&tid[2], NULL, iq_downsample, (void *)&cntlbuf);
+    pthread_join (tid[2], NULL);
+
+
+    /* clean up */
+    free (buffer1);
+    free (buffer2);
+    free (channel1);
+    free (channel2);
+
+    close (fdinput);
+    close (fdoutput);
 
   return 0;
 }
 
+
+void *read_buf (void *rdata) {
+    struct jdata *rbuf = (struct jdata *)rdata;
+
+    /* read one buffer */
+    if ((rbuf->bytesread = read (fdinput, rbuf->bfrthr1, bufsize)) == -1) {
+	perror ("read");
+	return;
+    }
+}
+
+
+void *proc_buf (void *pdata) {
+    struct jdata *pbuf = (struct jdata *)pdata;
+
+    /* unpack and downsample */
+    switch (mode)
+      {
+        case 1:
+          unpack_pfs_2c2b (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          break;
+        case 2:
+          unpack_pfs_2c4b (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          break;
+        case 3:
+          unpack_pfs_2c8b (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          break;
+        case 5:
+          if (chan == 2) {
+	    unpack_pfs_4c2b_lcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          } else {
+            unpack_pfs_4c2b_rcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          }
+          break;
+        case 6:
+          if (chan == 2) {
+            unpack_pfs_4c4b_lcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+          } else {
+            unpack_pfs_4c4b_rcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+	  }
+          break;
+        case 8:
+        case 32:
+          memcpy (pbuf->chnthr2, pbuf->bfrthr2, bufsize);
+          break;
+        default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
+      }
+}
+
+
 /******************************************************************************/
 /*	iq_downsample							      */
 /******************************************************************************/
-void iq_downsample(float *inbuf, int nsamples, int downsample, float scale, float dcoffi, float dcoffq)
+
+void *iq_downsample (void *pdata) 
 {
-  double i = 0;
-  double q = 0;
+  struct jdata *pbuf = (struct jdata *)pdata;
+
+  char	*inbuf  = (char *) pbuf->chnthr1; 
+  float iq[2];
+
+  /* accumulator larger enough to not cause overflow on all downsampled data */
+  int	is  = 0,   qs  = 0;	/* is, qs  : char  accumulators for I & Q */
+  float isf = 0.0, qsf = 0.0;	/* isf, qsf: float accumulators for I & Q */
+
   signed char *x;
   float *y;
-  double is,qs;
-  int j,k,l=0;
+
+  int j, k=0, l=0;
   int nbytes = 2 * nsamples / downsample;
   int nclipped = 0;
+  int bcnt;
+
+  float iscale = dcoffi * downsample * scale;
+  float qscale = dcoffq * downsample * scale;
 
   if (floats) 
     y = (float *) malloc(4 * nbytes);
   else
     x = (signed char *) malloc(nbytes);
 
-  for (j = 1, k = 0; j <= nsamples; j += 1, k += 2)
-    {
-      /* sum Is and Qs */
-      i  += inbuf[k];
-      q  += inbuf[k+1];
+  for (bcnt = nsamples / downsample; bcnt > 0; bcnt--)
+  {
+    if (mode == 32) {
+	for (j = 0, isf = 0.0, qsf = 0.0; j < downsample; j += 8, k += 8) {
+	  memcpy (&iq[0], &inbuf[k], 8);
 
-      /* finished coherent sum */
-      if (j % downsample == 0)
-	{
-	  if (floats)
-	    {
-	      /* scaling is unnecessary, but it makes */
-	      /* comparisons with other modes simpler */
-	      is = ((i-dcoffi*downsample) * scale);
-	      qs = ((q-dcoffq*downsample) * scale);
-
-	      y[l++] = (float) is;
-	      y[l++] = (float) qs;
-	    }
-	  else
-	    {
-	      /* signed bytes have limited dynamic range */
-	      /* scale */
-	      is = ((i-dcoffi*downsample) * scale);
-	      qs = ((q-dcoffq*downsample) * scale);
-
-	      /* compute clipped */
-	      if (is >  127) {is =  127; nclipped++;}
-	      if (is < -128) {is = -128; nclipped++;}
-	      if (qs >  127) {qs =  127; nclipped++;}
-	      if (qs < -128) {qs = -128; nclipped++;}
-	      
-	      x[l++] = (signed char) is;
-	      x[l++] = (signed char) qs;
-	    }
-	  /* zero accumulator */
-	  i = 0;
-	  q = 0;
+	  /* sum Is and Qs */
+	  isf  += iq[0];
+	  qsf  += iq[1];
 	}
+    } else {
+	for (j = 0, is = 0, qs = 0; j < downsample; j++) {
+	  /* sum Is and Qs */
+	  is  += *inbuf++;
+	  qs  += *inbuf++;
+	}
+
+	isf = (float) is;
+	qsf = (float) qs;
     }
+
+    /* finished coherent sum */
+    if (floats)
+    {
+      /* scaling is unnecessary, but it makes */
+      /* comparisons with other modes simpler */
+
+      y[l++] = scale * isf - iscale;
+      y[l++] = scale * qsf - qscale;
+    }
+    else
+    {
+      /* signed bytes have limited dynamic range */
+      /* scale */
+      is = scale * isf - iscale;
+      qs = scale * qsf - qscale;
+
+      /* compute clipped */
+      if (is >  127) {is =  127; nclipped++;}
+      if (is < -128) {is = -128; nclipped++;}
+      if (qs >  127) {qs =  127; nclipped++;}
+      if (qs < -128) {qs = -128; nclipped++;}
+	      
+      x[l++] = (signed char) is;
+      x[l++] = (signed char) qs;
+    }
+  }
+
   if (l != nbytes) fprintf(stderr,"oops\n");
   
   /* print diagnostics */
@@ -305,19 +459,18 @@ void iq_downsample(float *inbuf, int nsamples, int downsample, float scale, floa
   /* write it out */
   if (floats)
     {
-      if (1 != fwrite(y, 4 * nbytes, 1, fpoutput))
-	fprintf(stderr,"Write error\n");
+      if (write(fdoutput, y, 4 * nbytes) != 4 * nbytes) perror ("Write floats");
       free(y);
     }
   else
     {
-      if (1 != fwrite(x, nbytes, 1, fpoutput))
-	fprintf(stderr,"Write error\n");
+      if (write(fdoutput, x, nbytes) != nbytes) perror ("Write bytes");
       free(x);
     }
-    
+
   return;
 }    
+
 
 /******************************************************************************/
 /*	processargs							      */
@@ -429,27 +582,6 @@ float   *fudge;
 	  exit(1);
 }
 
-/******************************************************************************/
-/*	open file    							      */
-/******************************************************************************/
-void	open_file(outfile,fpoutput)
-char	*outfile;		/* output file name */
-FILE    **fpoutput;		/* pointer to output file */
-{
-  /* opens the output file, stdout is default */
-  if (outfile[0] == '-')
-    *fpoutput=stdout;
-  else
-    {
-      *fpoutput=fopen(outfile,"w");
-      if (*fpoutput == NULL)
-	{
-	  perror("open_files: output file open error");
-	  exit(1);
-	}
-    }
-  return;
-}
 
 /******************************************************************************/
 /*	copy_cmd_line    						      */
