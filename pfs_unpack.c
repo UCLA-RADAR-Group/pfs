@@ -21,6 +21,9 @@
 
 /* 
    $Log$
+   Revision 1.4  2002/04/27 20:21:44  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.3  2000/11/01 02:18:51  margot
    Added some fragile form of text output.
 
@@ -99,16 +102,17 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; break; 
     case  5: smpwd = 4; break;
     case  6: smpwd = 2; break;
+    case  8: smpwd = 2; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   outbufsize = 2 * nsamples * sizeof(float);
+  buffer = (char *) malloc(bufsize);
   rcp = (float *) malloc(outbufsize);
   lcp = (float *) malloc(outbufsize);
-  buffer = (char *) malloc(bufsize);
-  if (buffer == NULL) 
+  if (lcp == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -146,6 +150,9 @@ int main(int argc, char *argv[])
 	case 6:
 	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
 	  if (chan == 2) memcpy(rcp, lcp, outbufsize);
+	  break;
+     	case 8: 
+	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
 	  break;
 	default: 
 	  fprintf(stderr,"mode not implemented yet\n"); 
