@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.5  2003/07/03 18:38:59  cvs
+   Fixed bug that allowed writing of incomplete buffers at EOF.
+
    Revision 1.4  2003/07/03 18:34:52  cvs
    Changed to one-based convention instead of zero-based convention.
 
@@ -40,6 +43,7 @@
 */
 
 #include <math.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +76,7 @@ int main(int argc, char *argv[])
   int nskipbytes;
   int startbyte;
   int stopbyte;
+  int offset;
   char *buffer;			/* buffer space */
 
   int i;
@@ -139,28 +144,22 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Plus an additional %d bytes\n",nskipbytes);
   fprintf(stderr,"Output bytes %d-%d from each record\n",startbyte,stopbyte);
 
-  /* skip unwanted records */
-  buffcount = 0;
-  while (buffcount < nskipbuffs)
-    {
-      if (nbytes != read(fdinput, buffer, nbytes))
-	fprintf(stderr,"Read error\n");
-      buffcount++;
-    }
-  
   /* skip unwanted bytes */
-  if (nskipbytes != 0)
+  /* nskipbuffs at nbytes each plus nskipbytes */
+  offset = nskipbuffs * nbytes + nskipbytes;
+  if (offset != lseek(fdinput, offset, SEEK_SET))
     {
-      if (nskipbytes != read(fdinput, buffer, nskipbytes))
-	fprintf(stderr,"Read error\n");
+      fprintf(stderr,"Read error while skipping buffers.  Check file size.\n");
+      exit(1);
     }
 
   /* read-write rest of data */
-  while(buffcount < nreads + nskipbuffs)
+  buffcount = 0;
+  while(buffcount < nreads)
     {
-      if (nbytes != read(fdinput, buffer, nbytes))
+      if (read(fdinput, buffer, nbytes) < stopbyte)
 	{
-	  fprintf(stderr,"Read error or EOF\n");
+	  fprintf(stderr,"Short read or EOF\n");
 	  exit(1);
 	}
       if (1 != fwrite(&buffer[startbyte-1],stopbyte-startbyte+1,1,fpoutput))
@@ -209,7 +208,7 @@ int     *stopbyte;
   *outfile = "-";		 /* initialise to stdout */
 
   *nbytes  = -1;		 /* no default value */
-  *nreads  = 1e30;
+  *nreads  = INT_MAX;
   *nskipbuffs = 0;
   *nskipbytes = 0;
   *startbyte = 1;
