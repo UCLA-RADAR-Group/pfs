@@ -6,9 +6,9 @@
 *
 *  usage:
 *  	pfs_fft -m mode 
-*              [-f sampling frequency (MHz)] 
+*               -f sampling frequency (MHz)
+*              [-r desired frequency resolution (Hz)]  
 *              [-d downsampling factor] 
-*              [-r desired frequency resolution (Hz)] 
 *              [-n sum n transforms] 
 *              [-l (dB output)]
 *              [-t time series] 
@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.2  2003/09/18 02:52:44  cvs
+   Improved command-line option error handling.
+
    Revision 3.1  2003/02/25 22:45:34  cvs
    Sizes of fftinbuf and fftoutbuf must be identical.
 
@@ -166,7 +169,10 @@ int main(int argc, char *argv[])
   open_flags = O_RDONLY;
 #endif
   if((fdinput = open(infile, open_flags)) < 0 )
-    perror("open input file");
+    {
+      perror("open input file");
+      exit(1);
+    }
 
   switch (mode)
     {
