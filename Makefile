@@ -8,8 +8,8 @@
 include Makefile.inc
 #
 #
-PROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_levels pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
-OBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_levels.o pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
+PROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
+OBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
 #
 #
 all: $(PROGRAMS)
@@ -41,6 +41,16 @@ pfs_trigger : pfs_trigger.o
 	$(LDFLAGS) \
 	-lpthread \
 	-o pfs_trigger
+#
+#
+# pfs_reset tests the 1 PPS and clock signals
+#
+pfs_reset : pfs_reset.o 
+	$(F77) pfs_reset.o \
+	-L/opt/EDTpcd -ledt \
+	$(LDFLAGS) \
+	-lpthread \
+	-o pfs_reset
 #
 # pfs_levels sets the PFS attenuator levels
 #
@@ -106,6 +116,7 @@ pfs_skipbytes : pfs_skipbytes.o
 pfs_radar.o:	 pfs_radar.c ;	   $(CC) $(CFLAGS) -c pfs_radar.c -I/opt/EDTpcd
 pfs_sample.o:	 pfs_sample.c ;	   $(CC) $(CFLAGS) -c pfs_sample.c -I/opt/EDTpcd
 pfs_trigger.o:	 pfs_trigger.c ;   $(CC) $(CFLAGS) -c pfs_trigger.c -I/opt/EDTpcd
+pfs_reset.o:	 pfs_reset.c ;   $(CC) $(CFLAGS) -c pfs_reset.c -I/opt/EDTpcd
 pfs_levels.o:	 pfs_levels.c ;	   $(CC) $(CFLAGS) -c pfs_levels.c -I/opt/EDTpcd
 pfs_hist.o:	 pfs_hist.c ;	   $(CC) $(CFLAGS) -c pfs_hist.c 
 pfs_stats.o:	 pfs_stats.c ;	   $(CC) $(CFLAGS) -c pfs_stats.c 
@@ -129,4 +140,4 @@ install: $(PROGRAMS)
 	done;
 #
 distrib:
-	tar cvf distrib.tar Makefile multifile.c multifile.h unpack.h unp_pfs_pc_edt.c pfs_radar.c pfs_sample.c pfs_trigger.c pfs_levels.c pfs_hist.c pfs_stats.c pfs_unpack.c pfs_downsample.c pfs_fft.c pfs_dehop.c pfs_skipbytes.c
+	tar cvf distrib.tar Makefile multifile.c multifile.h unpack.h unp_pfs_pc_edt.c pfs_radar.c pfs_sample.c pfs_trigger.c pfs_reset.c pfs_levels.c pfs_hist.c pfs_stats.c pfs_unpack.c pfs_downsample.c pfs_fft.c pfs_dehop.c pfs_skipbytes.c
