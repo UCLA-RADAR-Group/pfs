@@ -1,0 +1,84 @@
+Instructions for downloading and installing PFS software
+
+There is a decades-long tradition in UNIX of storing sources,
+libraries, and executables in sub-directories src, lib, bin,
+respectively.  We follow this convention.  
+
+On PFS boxes, we expect the following directory structure:
+/home/pfs/src
+/home/pfs/bin
+/home/pfs/lib
+If it doesn't exist, please create it.
+
+Go to the directory where you would like to hold the PFS software.  
+On PFS boxes, this should be /home/pfs/src.  
+Issue the commands below in that directory.
+
+The PFS software is maintained in a software repository that uses CVS,
+the Concurrent Versions System.  CVS is open source software that
+makes it easy for multiple developers to write and maintain code, keep
+track of version history, handle releases, etc.  Install CVS on your
+system if needed.
+
+Specify the path to the software repository:
+
+% export CVSROOT=:pserver:pfs@planets.astro.cornell.edu:/home/cvsroot
+OR
+% setenv CVSROOT :pserver:pfs@planets.astro.cornell.edu:/home/cvsroot
+
+Login with the PFS password.
+
+% cvs login
+
+You should only have to do this once.  If you don't know the password, 
+call 607 255 1810 and an operator will assist you.
+
+Then use standard CVS commands to download the software:
+
+% cvs co fftw
+% cvs co pfs
+% cvs co radardecode
+
+Compile the fft library:
+
+% cd fftw
+% ./configure --enable-float --prefix=/home/pfs
+% make
+% make install
+% cd ..
+
+Compile the pfs software:
+
+% cd pfs
+% make 
+% make install
+% cd ..
+
+If compilation fails, you probably have not followed instructions.  
+If you believe you followed instructions, send a bug report to
+jlm@astro.cornell.edu.  
+You may have to edit Makefile.inc if your setup is non-standard.
+You may have to compile the EDT library if you have not done so.
+
+Compile the radardecode software:
+
+% cd radardecode
+% make
+% cd ..
+
+You can keep your PFS software current by periodically running:
+
+% cd pfs
+% cvs update
+% make 
+% make install
+
+Please send comments and bug reports to:
+
+Jean-Luc Margot
+Department of Astronomy
+Cornell University
+304 Space Sciences Bldg
+Ithaca, NY 14853
+607 255 1810 
+jlm@astro.cornell.edu
