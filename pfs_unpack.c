@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.3  2002/05/26 00:39:30  cvs
+   Removed buggy adjustment to input buffer size
+
    Revision 2.2  2002/05/12 15:50:11  cvs
    Added detect option and better checks on buffer size.
 
@@ -177,8 +180,6 @@ int main(int argc, char *argv[])
 	{
 	case 1:
 	  unpack_pfs_2c2b(buffer, rcp, bufsize); 
-	  if (outbufsize != write(fdoutput,rcp,outbufsize))
-	    fprintf(stderr,"Write error\n");  
 	  break;
 	case 2: 
 	  unpack_pfs_2c4b(buffer, rcp, bufsize);
