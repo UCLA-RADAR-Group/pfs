@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 2.2  2002/05/26 04:22:23  cvs
+   Prints warning for odd file sizes.
+
    Revision 2.1  2002/05/26 01:01:49  cvs
    Better scheme for handling short buffers, including those at end of file.
 
@@ -259,6 +262,7 @@ int main(int argc, char *argv[])
     }
   else
     {
+      fprintf(fpoutput,">");
       fprintf(fpoutput,"% 10.4f % 10.4f ",ri,rii);
       fprintf(fpoutput,"% 10.4f % 10.4f ",rq,rqq);
       fprintf(fpoutput,"% 10.4f ",fabs(riq - ri*rq)/rii/rqq);
