@@ -15,6 +15,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2002/04/27 06:43:16  margot
+   Updated device filename.
+
    Revision 1.1  2002/04/27 06:20:42  margot
    Initial revision
 
@@ -26,7 +29,6 @@
 #include <string.h>
 #include <fcntl.h>
 
-#include "edt.h"
 #include "edtinc.h"
 
 /* revision control variable */
