@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 2.1  2002/05/26 01:01:49  cvs
+   Better scheme for handling short buffers, including those at end of file.
+
    Revision 2.0  2002/05/13 00:01:32  cvs
    Added -a option for statistics on entire input file.
 
@@ -115,6 +118,16 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
+  /* check file size */
+  if (fstat (fdinput, &filestat) < 0)
+    {
+      perror("input file status");
+      exit(1);
+    }
+  if (filestat.st_size % 4 != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n",
+	    filestat.st_size);
+
   switch (mode)
     {
     case -1: smpwd = 8; levels =   4; break;  
@@ -152,14 +165,14 @@ int main(int argc, char *argv[])
   if (parse_end)
     lseek(fdinput, -bufsize, SEEK_END);
 
-  /* read buffers */
+  /* infinite loop */
   while (1)
     {
-
+      /* read one buffer */
       bytesread = read(fdinput, buffer, bufsize);
       /* check for end of file */
       if (bytesread == 0) break;
-      /* check for small buffers */
+      /* handle small buffers */
       if (bytesread != bufsize) 
 	{
 	  bufsize = bytesread;
