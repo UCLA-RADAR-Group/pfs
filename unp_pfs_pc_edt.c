@@ -301,4 +301,104 @@ void unpack_pfs_signed16bits(char *buf, float *outbuf, int bufsize)
   return;
 }
 
+/******************************************************************************/
+/*unpack_pfs_4c2b_rcp      */
+/******************************************************************************/
+void unpack_pfs_4c2b_rcp(char *buf, float *rcp, int bufsize)
+{
+  /*
+    unpacks 4-channel, 2-bit data from the portable fast sampler
+    input array buf is of size bufsize bytes
+    output arrays rcp contains 2*bufsize floats
+    rcp must each have storage for at least 2*bufsize*sizeof(float)
+  */
+  
+  /* order is RCP-I, RCP-Q and LCP-I, LCP-Q */
+  /* i.e. board 1 channel A, board 1 channel B */
+  /* and  board 2 channel A, board 2 channel B */
+  /* tested */
+  
+  char value;
+  float lookup[4] = {+3,+1,-1,-3};  
+  int i,r,l;
+  
+  r = 0;
+  l = 0;
+  for (i = 0; i < bufsize; i += 4) 
+    {
+      value = buf[i+1];
+      rcp[r++] = lookup[value & 3];
+      value = value >> 2;
+      rcp[r++] = lookup[value & 3];
+
+      value = buf[i+0];
+      rcp[r++] = lookup[value & 3];
+      value = value >> 2;
+      rcp[r++] = lookup[value & 3];
+
+      value = buf[i+3];
+      rcp[r++] = lookup[value & 3];
+      value = value >> 2;
+      rcp[r++] = lookup[value & 3];
+
+      value = buf[i+2];
+      rcp[r++] = lookup[value & 3];
+      value = value >> 2;
+      rcp[r++] = lookup[value & 3];
+
+    }
+
+  return;
+}
+
+
+/******************************************************************************/
+/*unpack_pfs_4c2b_lcp      */
+/******************************************************************************/
+void unpack_pfs_4c2b_lcp(char *buf, float *lcp, int bufsize)
+{
+  /*
+    unpacks 4-channel, 2-bit data from the portable fast sampler
+    input array buf is of size bufsize bytes
+    output array lcp each contains 2*bufsize floats
+    lcp must each have storage for at least 2*bufsize*sizeof(float)
+  */
+  
+  char value;
+  float lookup[4] = {+3,+1,-1,-3};  
+  int i,l;
+  
+  l = 0;
+  for (i = 0; i < bufsize; i += 4) 
+    {
+      value = buf[i+1];
+      value = value >> 4;
+      lcp[l++] = lookup[value & 3];
+      value = value >> 2;
+      lcp[l++] = lookup[value & 3];
+
+      value = buf[i+0];
+      value = value >> 4;
+      lcp[l++] = lookup[value & 3];
+      value = value >> 2;
+      lcp[l++] = lookup[value & 3];
+
+      value = buf[i+3];
+      value = value >> 4;
+      lcp[l++] = lookup[value & 3];
+      value = value >> 2;
+      lcp[l++] = lookup[value & 3];
+
+      value = buf[i+2];
+      value = value >> 4;
+      lcp[l++] = lookup[value & 3];
+      value = value >> 2;
+      lcp[l++] = lookup[value & 3];
+    }
+
+  return;
+}
+
+
+
 /*****************************************************************************/
