@@ -26,6 +26,9 @@
 
 /* 
    $Log$
+   Revision 3.4  2003/05/30 20:52:59  cvs
+   Fixed bug in summation with -m 32: j index should increment by 1, not 8.
+
    Revision 3.3  2003/05/29 22:49:43  cvs
    Fixed bug in bytestoskip: never initialized.
    Fixed bug in printout of buffers used: must be integers.
@@ -221,7 +224,7 @@ int main(int argc, char *argv[])
   /* open output file, stdout is default */
   if (outfile[0] == '-') {
      fdoutput=1;
-  } else if ((fdoutput = open(outfile, O_RDWR | O_CREAT | O_TRUNC, 0660)) < 0 )
+  } else if ((fdoutput = open(outfile, O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE, 0660)) < 0 )
   {
      perror("open input file");
      exit(1);
