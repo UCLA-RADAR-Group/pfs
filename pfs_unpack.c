@@ -4,13 +4,15 @@
 *  This programs unpacks data from the portable fast sampler
 *
 *  usage:
-*  	pfs_unpack -m mode [-c channel] [-o outfile] [infile]
+*  	pfs_unpack -m mode [-a (ascii output)] [-c channel] 
+*                  [-o outfile] [infile]
 *              
 *
 *  input:
 *       the input parameters are typed in as command line arguments
-*	the -m option specifies the data acquisition mode
+*	the -m argument specifies the data acquisition mode
 *       the -c argument specifies which channel (1 or 2) to process
+*       the -a option allows text output instead of binary output
 *
 *  output:
 *	the -o option identifies the output file, stdout is default
@@ -19,6 +21,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2000/10/30 21:32:09  margot
+   Added -c option
+
    Revision 1.1  2000/10/30 21:24:35  margot
    Initial revision
 
@@ -60,10 +65,11 @@ int main(int argc, char *argv[])
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int chan;		/* channel to process (1 or 2) for dual pol data */
-  int i;
+  int ascii;		/* text output */
+  int i,j;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&chan);
+  processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -147,8 +153,14 @@ int main(int argc, char *argv[])
 	}
 
       /* write data to output file */
-      if (outbufsize != write(fdoutput,rcp,outbufsize))
-	fprintf(stderr,"Write error\n");  
+      if (ascii)
+	{
+	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
+	    fprintf(stdout,"% .0f % .0f\n",rcp[j],rcp[j+1]);
+	}
+      else
+	if (outbufsize != write(fdoutput,rcp,outbufsize))
+	  fprintf(stderr,"Write error\n");  
     }
 
   return 0;
@@ -157,13 +169,14 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,chan)
+void	processargs(argc,argv,infile,outfile,mode,chan,ascii)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
 char	**outfile;		 /* output file name */
 int     *mode;
 int     *chan;
+int     *ascii;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_unpack program:
@@ -176,8 +189,8 @@ int     *chan;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:c:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_unpack -m mode [-c channel] [-o outfile] [infile] ";
+  char *myoptions = "m:c:o:a"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -189,6 +202,7 @@ int     *chan;
 
   *mode  = 0;                /* default value */
   *chan  = 1;
+  *ascii = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -208,6 +222,11 @@ int     *chan;
       case 'c':
 	sscanf(optarg,"%d",chan);
 	arg_count += 2;
+	break;
+	
+      case 'a':
+	*ascii = 1;
+	arg_count += 1;
 	break;
 	
       case '?':			 /*if not in myoptions, getopt rets ? */
