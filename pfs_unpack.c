@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.4  2002/05/26 03:59:18  cvs
+   Removed write statement unintentionally left over from earlier revision.
+
    Revision 2.3  2002/05/26 00:39:30  cvs
    Removed buggy adjustment to input buffer size
 
@@ -90,6 +93,7 @@ int main(int argc, char *argv[])
   struct stat filestat;	/* input file status structure */
   int bufsize = 1000000;/* size of read buffer, default 1 MB, unless input file is smaller */
   int outbufsize;	/* output buffer size */
+  int bytesread;	/* number of bytes read from input file */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
   double fsamp;		/* sampling frequency, MHz */
@@ -123,17 +127,15 @@ int main(int argc, char *argv[])
     perror("open output file");
 #endif
 
-  /* get file status and adjust buffer size if necessary */
+  /* check file size */
   if (fstat (fdinput, &filestat) < 0)
     {
       perror("input file status");
       exit(1);
     }
-  if (filestat.st_size < bufsize) bufsize = filestat.st_size;
-  fprintf(stderr,"Unpacking file of size %d with %d byte buffers\n",
-	  filestat.st_size,bufsize);
-  if (filestat.st_size % bufsize != 0) 
-    fprintf(stderr,"Warning: not an integer number of buffers\n");
+  if (filestat.st_size % 4 != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n",
+	    filestat.st_size);
 
   switch (mode)
     {
@@ -168,11 +170,15 @@ int main(int argc, char *argv[])
   while (1)
     {
       /* read one buffer */
-      if (bufsize != read(fdinput, buffer, bufsize))
+      bytesread = read(fdinput, buffer, bufsize);
+      /* check for end of file */
+      if (bytesread == 0) break;
+      /* handle small buffers */
+      if (bytesread != bufsize) 
 	{
-	  perror("read");
-	  fprintf(stderr,"Read error or EOF\n");
-	  exit(1);
+	  bufsize = bytesread;
+	  nsamples = (int) rint(bufsize * smpwd / 4.0);
+	  outbufsize = 2 * nsamples * sizeof(float);
 	}
 
       /* unpack */
