@@ -87,6 +87,7 @@ pfs_unpack : pfs_unpack.o
 pfs_downsample : pfs_downsample.o 
 	$(F77) pfs_downsample.o libunpack.o \
 	$(LDFLAGS) \
+	-lpthread \
 	-o pfs_downsample
 #
 # pfs_fft performs spectral analysis on data from the portable fast sampler
