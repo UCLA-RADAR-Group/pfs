@@ -25,6 +25,10 @@
 
 /* 
    $Log$
+   Revision 1.2  2001/07/10 01:43:35  margot
+   Added check on file size and compared to downsampling factor
+   and input buffer size.
+
    Revision 1.1  2001/07/06 19:46:23  margot
    Initial revision
 
@@ -85,9 +89,6 @@ int main(int argc, char *argv[])
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
 
-  /* open output file, stdout default */
-  open_file(outfile,&fpoutput);
-
   /* open file input */
 #ifdef LARGEFILE
   open_flags = O_RDONLY|O_LARGEFILE;
@@ -95,7 +96,10 @@ int main(int argc, char *argv[])
   open_flags = O_RDONLY;
 #endif
   if((fdinput = open(infile, open_flags)) < 0 )
-    perror("open input file");
+    {
+      perror("open input file");
+      exit(1);
+    }
 
   /* get file status */
   if (fstat (fdinput, &filestat) < 0)
@@ -103,6 +107,10 @@ int main(int argc, char *argv[])
       perror("input file status");
       exit(1);
     }
+
+  /* open output file, stdout default */
+  open_file(outfile,&fpoutput);
+
 
   switch (mode)
     {
