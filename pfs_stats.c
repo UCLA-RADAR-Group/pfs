@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 1.5  2002/04/27 20:22:10  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.4  2001/07/06 19:49:26  margot
    Added -e option for statistics at end of file.
    Added unpacking of signed bytes.
@@ -43,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <asm/fcntl.h>
+#include <sys/stat.h>
 #include "unpack.h"
 
 /* revision control variable */
@@ -65,7 +69,7 @@ void iq_stats(float *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
 {
-  int mode;
+  struct stat filestat;	/* input file status structure */
   int bufsize = 1048576;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
@@ -75,6 +79,7 @@ int main(int argc, char *argv[])
   int open_flags;	/* flags required for open() call */
   int parse_all;
   int parse_end;
+  int mode;
   int i;
 
   /* get the command line arguments and open the files */
@@ -97,6 +102,15 @@ int main(int argc, char *argv[])
       perror("open input file");
       exit(1);
     }
+
+  /* get file status and adjust buffer size if needed */
+  if (fstat (fdinput, &filestat) < 0)
+    {
+      perror("input file status");
+      exit(1);
+    }
+  if (filestat.st_size < bufsize) 
+    bufsize = filestat.st_size;
 
   switch (mode)
     {
@@ -218,6 +232,14 @@ void iq_stats(float *inbuf, int nsamples, int levels)
   fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
   fprintf(fpoutput,"% 10.4f % 10.4f ",i/levels/2.0,ii/levels/2.0);
   fprintf(fpoutput,"% 10.4f % 10.4f ",q/levels/2.0,qq/levels/2.0);
+  fprintf(fpoutput,"\n"); 
+
+  /* convert to dBm */
+  /* AD range is 1 Vpp */
+  fprintf(fpoutput,"In dBm:\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+  fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(ii/levels/2.0)+13);
+  fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(qq/levels/2.0)+13);
   fprintf(fpoutput,"\n"); 
 
   return;
