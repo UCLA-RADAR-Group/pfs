@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.6  2002/05/02 05:48:34  cvs
+   Mode added to usage line
+
    Revision 1.5  2002/05/01 06:28:08  cvs
    Added downsampling of 8 bit data, modes 3 and 8.
 
@@ -79,7 +82,7 @@ int main(int argc, char *argv[])
   int mode;		/* data acquisition mode */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
-  int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   float maxunpack;	/* maximum unpacked value from libunpack */
   float maxvalue;	/* maximum achievable value by downsampling */
@@ -130,6 +133,7 @@ int main(int argc, char *argv[])
     case  5:  smpwd = 4; maxunpack =   +3; break;
     case  6:  smpwd = 2; maxunpack =  +15; break;
     case  8:  smpwd = 2; maxunpack = +255; break;
+    case 32:  smpwd = 0.5; maxunpack = +255; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -155,7 +159,7 @@ int main(int argc, char *argv[])
   else
     /* if the filesize is a multiple of the downsampling factor, */
     /* we try to choose a buffer size that will fit nicely as well */
-    while (filestat.st_size % bufsize != 0)
+    while (filestat.st_size % bufsize != 0 && bufsize % 4 != 0)
       bufsize -= downsample;
   fprintf(stderr,"Using %d buffers of size of %d\n", 
 	  filestat.st_size / bufsize, bufsize);
@@ -205,6 +209,10 @@ int main(int argc, char *argv[])
 	  break;
      	case 8: 
 	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
+	  break;
+     	case 32: 
+	  memcpy(rcp, buffer, bufsize);
 	  iq_downsample(rcp, nsamples, downsample, scale, dcoffi, dcoffq);
 	  break;
 	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
