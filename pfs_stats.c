@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 1.6  2002/05/03 18:08:11  cvs
+   Added dBm scale.
+
    Revision 1.5  2002/04/27 20:22:10  margot
    Removed obsolete routines specific to Golevka Sampling Box.
 
@@ -65,6 +68,7 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
+void stats(float *inbuf, int nsamples);
 void iq_stats(float *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
@@ -73,7 +77,7 @@ int main(int argc, char *argv[])
   int bufsize = 1048576;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
-  int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
@@ -120,7 +124,9 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; levels = 256; break; 
     case  5: smpwd = 4; levels =   4; break;
     case  6: smpwd = 2; levels =  16; break;
-    case  8: smpwd = 2; levels = 256; break; 
+    /* A/D levels do not apply for packing modes below */  
+    case   8: smpwd =   2; break; 
+    case  32: smpwd = 0.5; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -175,7 +181,11 @@ int main(int argc, char *argv[])
       break;
     case 8: 
       unpack_pfs_signedbytes(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples, levels);
+      stats(rcp, nsamples);
+      break;
+    case 32: 
+      memcpy(rcp,buffer,bufsize);
+      stats(rcp, nsamples);
       break;
 
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
@@ -246,6 +256,51 @@ void iq_stats(float *inbuf, int nsamples, int levels)
 }    
 
 /******************************************************************************/
+/*	stats								      */
+/******************************************************************************/
+void stats(float *inbuf, int nsamples)
+{
+  double i=0;
+  double q=0;
+  double ii=0;
+  double qq=0;
+  double iq=0;
+
+  int k;
+
+  /* sum Is and Qs */
+  for (k = 0; k < 2*nsamples; k += 2)
+    {
+      i  += inbuf[k];
+      q  += inbuf[k+1];
+      iq += inbuf[k] * inbuf[k+1];
+      ii += inbuf[k] * inbuf[k];
+      qq += inbuf[k+1] * inbuf[k+1];
+    }
+
+  /* compute mean and standard deviation */
+  i = i / nsamples;
+  q = q / nsamples;
+  
+  iq = iq / nsamples;
+
+  ii = ii / nsamples;
+  qq = qq / nsamples;
+
+  ii = sqrt(ii - i*i);
+  qq = sqrt(qq - q*q);
+
+  fprintf(fpoutput,"Statistics:\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+  fprintf(fpoutput,"% 10.4f % 10.4f ",i,ii);
+  fprintf(fpoutput,"% 10.4f % 10.4f ",q,qq);
+  fprintf(fpoutput,"% 10.4f ",fabs(iq - i*q)/ii/qq);
+  fprintf(fpoutput,"\n"); 
+
+  return;
+}    
+
+/******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
 void	processargs(argc,argv,infile,outfile,mode,parse_all,parse_end)
@@ -270,7 +325,7 @@ int     *parse_end;
 
   char *myoptions = "m:o:ae"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_stats -m mode [-e (parse data at eof)] [-a (parse all data)] [-o outfile] [infile] ";
-  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n";
+  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
