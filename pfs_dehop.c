@@ -11,6 +11,7 @@
 *              [-d dwell time (s)] 
 *              [-r frequency resolution (Hz)] 
 *	       [-h f0,df,n (KHz)]
+*              [-b (binary output)] 
 *              [-o outfile] [infile]
 *
 *  input:
@@ -28,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2001/07/06 19:34:40  margot
+   Added baseline subtraction.
+
    Revision 1.2  2001/07/06 19:02:34  margot
    Simplified adding.
 
@@ -82,12 +86,12 @@ int main(int argc, char *argv[])
   int init;		/* location of first hop in fft array */
   int shift;		/* shift by this many locations between hops */
   int open_flags;	/* flags required for open() call */
-  int binary = 1;	/* binary output */
-  int inverted = 1;	/* frequency axis inverted */
+  int binary;		/* binary output */
+  int inverted = 0;	/* frequency axis inverted */
   int i,j,k,l,m;	/* indices */
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&fsamp,&freqres,&dwell,&f0,&df,&hops);
+  processargs(argc,argv,&infile,&outfile,&fsamp,&freqres,&dwell,&f0,&df,&hops,&binary);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -108,9 +112,9 @@ int main(int argc, char *argv[])
   /* compute transform parameters */
   fftlen = fsamp * 1e3 / freqres;
   inbufsize = fftlen * sizeof(float); 
-  fftsperhop = dwell * freqres;
-  init  = fftlen / 2 + f0 * 1e3 / freqres;
-  shift = df * 1e3 / freqres;
+  fftsperhop = (int) rint(dwell * freqres);
+  init  = (int) rint(fftlen / 2.0 + f0 * 1e3 / freqres);
+  shift = (int) rint(df * 1e3 / freqres);
   outbufsize = shift * sizeof(float);
 
   fprintf(stderr,"\n%s\n\n",command_line);
@@ -193,7 +197,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,fsamp,freqres,dwell,f0,df,hops)
+void	processargs(argc,argv,infile,outfile,fsamp,freqres,dwell,f0,df,hops,binary)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -204,6 +208,7 @@ int     *dwell;
 double  *f0;
 double  *df;
 int     *hops;
+int     *binary;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_dehop program:
@@ -216,8 +221,8 @@ int     *hops;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "f:d:r:h:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_dehop [-f sampling frequency (KHz)] [-d dwell time (s)] [-r frequency resolution (Hz)] [-h f0,df,n (KHz)] [-o outfile] [infile]";
+  char *myoptions = "f:d:r:h:o:b"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_dehop [-f sampling frequency (KHz)] [-d dwell time (s)] [-r frequency resolution (Hz)] [-h f0,df,n (KHz)] [-b (binary output)] [-o outfile] [infile]";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
@@ -232,6 +237,7 @@ int     *hops;
   *f0 = 0;
   *df = 0;
   *hops = 1;
+  *binary = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -257,7 +263,12 @@ int     *hops;
 	sscanf(optarg,"%d",dwell);
 	arg_count += 2;
 	break;
-	
+
+      case 'b':
+	*binary = 1;
+	arg_count += 1;
+	break;	
+
       case 'h':
 	if ( no_comma_in_string(optarg) )
 	  {
