@@ -13,6 +13,7 @@
 *              [-l (dB output)]
 *              [-t time series] 
 *              [-x freqmin,freqmax (Hz)]
+*              [-s scale to sigmas using smin,smax (Hz)]
 *              [-c channel] 
 *              [-o outfile] [infile]
 *
@@ -38,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.5  2001/07/06 04:25:28  margot
+   Added mode 32 for "unpacking" of 4 byte floating point quantities.
+
    Revision 1.4  2001/07/04 00:14:57  margot
    Added mode 8 for unpacking signed bytes.
 
@@ -97,8 +101,12 @@ int main(int argc, char *argv[])
   float freq;		/* frequency */
   float freqmin;	/* min frequency to output */
   float freqmax;	/* max frequency to output */
+  float rmsmin;		/* min frequency for rms calculation */
+  float rmsmax;		/* max frequency for rms calculation */
   double fsamp;		/* sampling frequency, MHz */
   double freqres;	/* frequency resolution, Hz */
+  double mean,var;	/* needed for rms computation */
+  double sigma = 1;	/* needed for rms computation */
   int downsample;	/* downsampling factor, dimensionless */
   int sum;		/* number of transforms to add, dimensionless */
   int timeseries;	/* process as time series, boolean */
@@ -110,10 +118,10 @@ int main(int argc, char *argv[])
   int swap = 1;		/* swap frequencies at output of fft routine */
 
   fftw_plan p;
-  int i,j,k,l;
+  int i,j,k,l,n;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&dB);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -251,6 +259,29 @@ int main(int argc, char *argv[])
   /* set DC to average of neighboring values  */
   total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2; 
 
+  /* compute rms if needed */
+  if (rmsmin != 0 || rmsmax != 0)
+    {
+      mean = var = 0;
+      n = 0;
+      /* this would be cool except that we never check the bounds */
+      /* imin = fftlen/2 + rmsmin/freqres; */
+      /* imax = fftlen/2 + rmsmax/freqres; */
+      for (i = 0; i < fftlen; i++)
+	{
+	  freq = (i-fftlen/2)*freqres;
+	  if (freq >= rmsmin && freq <= rmsmax)
+	    {
+	      mean += total[i];
+	      var  += total[i] * total[i];
+	      n++;
+	    } 
+	}
+      mean  = mean / n;
+      var   = var / n;
+      sigma = sqrt(var - mean * mean);
+    }
+  
   /* write output */
   /* either time series */
   if (timeseries)
@@ -269,9 +300,9 @@ int main(int argc, char *argv[])
 	  freq = (i-fftlen/2)*freqres;
 	  if (freq >= freqmin && freq <= freqmax) 
 	    if (dB)
-	      fprintf(fpoutput,"%.3f %f\n",freq,10*log10(total[i]));
+	      fprintf(fpoutput,"%.3f %f\n",freq,10*log10((total[i]-mean)/sigma));
 	    else
-	      fprintf(fpoutput,"%.3f %.0f\n",freq,total[i]);  
+	      fprintf(fpoutput,"%.3f %.1f\n",freq,(total[i]-mean)/sigma);  
 	}
   /* or standard output */
     else
@@ -279,9 +310,9 @@ int main(int argc, char *argv[])
 	{
 	  freq = (i-fftlen/2)*freqres;
 	  if (dB)
-	    fprintf(fpoutput,"%.3f %f\n",freq,10*log10(total[i]));
+	    fprintf(fpoutput,"%.3f %f\n",freq,10*log10((total[i]-mean)/sigma));
 	  else
-	    fprintf(fpoutput,"%.3f %.0f\n",freq,total[i]);  
+	    fprintf(fpoutput,"%.3f %.1f\n",freq,(total[i]-mean)/sigma);  
 	}
   
   return 0;
@@ -290,7 +321,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan,freqmin,freqmax,dB)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -304,6 +335,8 @@ int     *timeseries;
 int     *chan;
 float   *freqmin;
 float   *freqmax;
+float   *rmsmin;
+float   *rmsmax;
 int     *dB;
 {
   /* function to process a programs input command line.
@@ -317,8 +350,8 @@ int     *dB;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lx:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lx:s:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -338,6 +371,8 @@ int     *dB;
   *dB = 0;		/* default is linear output */
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
+  *rmsmin  = 0;		/* not set value */
+  *rmsmax  = 0;		/* not set value */
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -403,6 +438,20 @@ int     *dB;
 	  }
 	break;
 	
+      case 's':
+	if ( no_comma_in_string(optarg) )
+	  {
+	    fprintf(stderr,"\nERROR: require comma between -s args\n");
+	    goto errout;
+	  }
+	else
+	  {
+	    if (sscanf(optarg,"%f,%f",rmsmin,rmsmax) != 2)
+	      goto errout;
+	    arg_count += 2;          /* two command line arguments */
+	  }
+	break;
+	
       case '?':			 /*if not in myoptions, getopt rets ? */
 	goto errout;
 	break;
@@ -425,6 +474,11 @@ int     *dB;
   if (*timeseries && (*freqmin != 0 || *freqmax !=0)) 
     {
       fprintf(stderr,"Cannot have -t and -l simultaneously yet\n");
+      exit(1);
+    }
+  if (*timeseries && (*rmsmin != 0 || *rmsmax !=0)) 
+    {
+      fprintf(stderr,"Cannot have -t and -s simultaneously yet\n");
       exit(1);
     }
 
