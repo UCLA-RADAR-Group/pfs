@@ -6,8 +6,8 @@ respectively.  We follow this convention.
 
 On PFS boxes, we expect the following directory structure:
 /home/pfs/src
-/home/pfs/bin
 /home/pfs/lib
+/home/pfs/bin
 If it doesn't exist, please create it.
 
 Go to the directory where you would like to hold the PFS software.  
@@ -33,7 +33,7 @@ Login with the PFS password.
 You should only have to do this once.  If you don't know the password, 
 call 607 255 1810 and an operator will assist you.
 
-Then use standard CVS commands to download the software:
+Then use the CVS check-out command (co) to download the software:
 
 % cvs co fftw
 % cvs co pfs
