@@ -54,9 +54,8 @@ Compile the pfs software:
 % make install
 % cd ..
 
-If compilation fails, you probably have not followed instructions.  
-If you believe you followed instructions, send a bug report to
-jlm@astro.cornell.edu.  
+If compilation fails and you believe you followed instructions, 
+please send a bug report to jlm@astro.cornell.edu.  
 You may have to edit Makefile.inc if your setup is non-standard.
 You may have to compile the EDT library if you have not done so.
 
