@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.9  2002/06/05 16:54:38  cvs
+   Added info on last buffer size.
+
    Revision 1.8  2002/05/26 05:07:11  cvs
    Better scheme for handling short buffers, including those at end of file.
 
@@ -163,7 +166,7 @@ int main(int argc, char *argv[])
 
   /* compute buffer size */
   /* we need a multiple of the downsampling factor, or order 1 MB */
-  bufsize = 4 * (int) rint(1000000/downsample) * downsample;
+  bufsize = 8 * (int) rint(1000000/downsample) * downsample;
   fprintf(stderr,"Using %d buffers of size %d\n", 
 	  filestat.st_size / bufsize, bufsize);
   
@@ -344,7 +347,7 @@ float   *fudge;
 
   char *myoptions = "m:o:d:c:s:I:Q:f"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s scale fudge factor] [-f output floating point numbers] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
-  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n";
+  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
