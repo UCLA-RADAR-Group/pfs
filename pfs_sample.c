@@ -19,6 +19,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2002/04/27 06:25:21  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -94,7 +97,7 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-  if ((edt_p = edt_open("pcd", 0)) == NULL)
+  if ((edt_p = edt_open("edt", 0)) == NULL)
     {
       perror("edt_open") ;
       exit(1) ;

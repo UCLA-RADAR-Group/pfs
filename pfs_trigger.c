@@ -15,6 +15,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2002/04/27 06:31:06  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -38,7 +41,7 @@ int main(int argc, char **argv)
     uint off = 0x0;
     uint on = 0x1; 
 
-    if ((edt_p = edt_open("pcd", 0)) == NULL)
+    if ((edt_p = edt_open("edt", 0)) == NULL)
     {
         perror("edt_open") ;
         exit(1) ;
