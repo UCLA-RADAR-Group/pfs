@@ -30,12 +30,16 @@
 
 /* 
    $Log$
+   Revision 1.1  2000/07/20 21:12:07  margot
+   Initial revision
+
 */
 
-#include <stdlib.h>
+#include <stdlib.h> 
 #include <dirent.h>
 #include <unistd.h>
 #include <time.h>
+#include <thread.h>
 #include <termios.h>
 #include <sys/time.h>
 #include <sys/procfs.h>
@@ -55,6 +59,7 @@ struct DISKWRITE { /* one of these for each diskbuffer allocated */
   char name[80];
   int fd;
   int len;
+  int offset;
   char *out;
   thread_t proc;
 };
@@ -67,7 +72,7 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int step;
   int cycles;
   int ringbufs;
-  int diskbufs;
+  int nfiles;
   struct DISKWRITE *dw;
   unsigned short **rings;
   time_t start;
@@ -86,7 +91,6 @@ struct DIRLIST {
 
 #define AMEG (1024*1024) /* default size of edt ring buffer */
 #define RINGBUFS  8      /* default number of one meg edt ring buffers */
-#define DISKBUFS  1      /* default number of pending disk writes */
 #define TWENSECS  3600   /* default number of seconds to take */
 #define AFEWSECS  3      /* interval bw key pressed and toggle EDT bit */
 
@@ -97,6 +101,7 @@ int main(int argc, char *argv[])
   int i,cycle;
   unsigned char *p;
   struct DISKWRITE *w;
+  struct DISKWRITE *wlast;
   int dcount, twensec;
   void *disk_write();
   struct RADAR *r;
@@ -114,13 +119,13 @@ int main(int argc, char *argv[])
 
   r = &radar;
   bzero( r, sizeof(struct RADAR ));
-  r->diskbufs = DISKBUFS;
   r->ringbufs = RINGBUFS;
   r->ameg = AMEG;
   r->pack = 1;
   r->twensec = 20 * TWENSECS;
   r->step = 0;
   r->cycles = 1;
+  w = NULL;
 
   dirhead = NULL;
   for( i=1; i<argc; i++ ) {
@@ -145,7 +150,7 @@ int main(int argc, char *argv[])
       }
     } else if( strncasecmp( p, "-files", strlen(p) ) == 0 ) {
       p = argv[++i];
-      if((r->diskbufs = atoi(p))<=0 ) {
+      if((r->nfiles = atoi(p))<=0 ) {
         fprintf(stderr, "bad value for -files\n");
         pusage();
       }
@@ -155,15 +160,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "bad value for -mode\n");
         pusage();
       }
-      switch (r->mode)
-	{
-	case 1: break;
-	case 2: break;
-	case 3: break;
-	case 5: break;
-	case 6: break;
-	default: fprintf(stderr,"invalid mode\n"); pusage();
-	}
     } else if( strncasecmp( p, "-start", strlen(p) ) == 0 ) {
       p = argv[++i];
       if((sscanf(p,"%d,%d,%d,%d,%d,%d",
@@ -202,6 +198,17 @@ int main(int argc, char *argv[])
     }
   }
 
+  /* check that sampling mode is valid */
+  switch (r->mode)
+    {
+    case 1: break;
+    case 2: break;
+    case 3: break;
+    case 5: break;
+    case 6: break;
+    default: fprintf(stderr,"invalid mode\n"); pusage();
+    }
+
   if (r->cycles > 1 && r->step < r->twensec / 20 + AFEWSECS)
     {
       fprintf(stderr,"Step size must be bigger than duration of A/D\n");
@@ -213,9 +220,6 @@ int main(int argc, char *argv[])
 
   if( r->ameg <=0 )
     r->ameg = AMEG;
-
-  if( r->diskbufs <=0 )
-    r->diskbufs = DISKBUFS;
 
   if( !dirhead ) {
     fprintf(stderr, "At least one -dir switch is required\n");
@@ -237,7 +241,7 @@ int main(int argc, char *argv[])
     }
 
   /* block trigger immediately */
-  edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1)); /* block trigger */
+  edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1));
 
   /* allocate input buffers */
   allocate_ringbufs(r);
@@ -334,14 +338,18 @@ int main(int argc, char *argv[])
 	    then.tv_sec = now.tv_sec;
 	    then.tv_usec = now.tv_usec;
 #endif TIMER
+	    wlast = w;
 	    w = &r->dw[dcount];
+
 	    /* copy data from EDT to disk write output buffer */
 	    memcpy(w->out,p,w->len);
-	    if( w->proc )
-	      thr_join( w->proc, NULL, NULL );
+
+	    if (wlast && wlast->proc)
+	      if(thr_join( wlast->proc, NULL, NULL ))
+		perror("thr_join");
 	    if( thr_create( NULL, 0, disk_write, w, THR_BOUND, &w->proc ))
 	      perror("do_write");
-	    if( ++dcount >=r->diskbufs )
+	    if( ++dcount >=r->ringbufs )
 	      dcount = 0;
 	  }
 	}
@@ -353,7 +361,7 @@ int main(int argc, char *argv[])
 	fprintf(r->logfd, "Finished, read %d buffers\n\n\n", i );
 
 #ifndef DEBUF      
-      for( i=0; i< r->diskbufs; i++ ) {
+      for( i=0; i< r->ringbufs; i++ ) {
 	w = &r->dw[i];
 	thr_join( w->proc, NULL, NULL );
       }
@@ -376,6 +384,15 @@ void *disk_write( w )
 struct DISKWRITE *w;
 {
   int writ;
+  int k;
+  long long offset;
+
+  /*
+  if((writ = pwrite( w->fd, w->out, w->len, w->offset ))!= w->len ) 
+    printf(" disk write buffer number %d\n", writ );
+  else
+    w->offset += writ;
+  */
 
   if((writ = write( w->fd, w->out, w->len))!= w->len ) 
     printf(" disk write error: could only write %d bytes\n", writ );
@@ -433,19 +450,20 @@ struct RADAR *r;
   struct DISKWRITE *w;
 
   pagesize = sysconf(_SC_PAGESIZE);
-  r->ameg = r->ameg + r->ameg%pagesize;
-  aout = (r->ameg) + (r->ameg)%pagesize;
+  aout = r->ameg;
+  if (aout%pagesize != 0) 
+    aout = (int) rint( (float) (aout / pagesize) ) * pagesize;
 
   if(!(r->dw = (struct DISKWRITE *)valloc( 
-     sizeof(struct DISKWRITE)*r->diskbufs))) {
+     sizeof(struct DISKWRITE)*r->ringbufs))) {
       fprintf(stderr, "bad malloc allocating buffer\n");
       exit(1);
   }
 
-  if( mlock( r->dw, sizeof(struct DISKWRITE)*r->diskbufs))
+  if( mlock( r->dw, sizeof(struct DISKWRITE)*r->ringbufs))
     perror("failed to mlock");
 
-  for( i=0; i< r->diskbufs; i++ ) {
+  for( i=0; i< r->ringbufs; i++ ) {
     w = &r->dw[i];
     if( !(w->out = ( char * ) valloc( aout ))) {
       fprintf(stderr, "bad valloc allocating buffer\n");
@@ -472,20 +490,24 @@ struct DIRLIST *head;
   struct DISKWRITE *w;
   struct DIRLIST *dir;
   char *tms;
+  int fd;
+  int offset;
+  char name[80];
 
   dir = head;
 
-  for( i=0; i< r->diskbufs; i++ ) {
-    w = &r->dw[i];
+  sprintf(name, "%s/data%s", dir->name, r->timestr );
+  if((fd = open(name, O_WRONLY|O_CREAT|O_LARGEFILE, 0664 )) < 0 )
+    perror("write file open");
+  offset = lseek(fd, 0L, SEEK_END );
 
-    if( !(dir = dir->next ))
-      dir = head;
-      
-    sprintf(w->name, "%s/data%s.%02d", dir->name, r->timestr, i );
-    if((w->fd = open(w->name, O_WRONLY|O_CREAT|O_LARGEFILE, 0664 )) < 0 )
-      perror("write file open");
+  for( i=0; i< r->ringbufs; i++ ) {
+    w = &r->dw[i];
+    w->fd = fd;
+    w->offset = offset;
     w->len = r->ameg;
     w->proc = NULL;
+    strncpy( w->name, name, 80 );
   }
 }
 
@@ -498,14 +520,10 @@ struct DIRLIST *head;
 close_files(r)
 struct RADAR *r;
 {
-  int i;
   struct DISKWRITE *w;
 
-  for( i=0; i< r->diskbufs; i++ ) 
-    {
-      w = &r->dw[i];
-      close(w->fd);
-    }
+  w = &r->dw[0];
+  close(w->fd);
 }
 
 
@@ -572,7 +590,7 @@ struct RADAR *r;
   fprintf(r->logfd, "Input buffer size %d bytes\n", r->ameg );
   fprintf(r->logfd, "Input buffers, %d\n", r->ringbufs );
   fprintf(r->logfd, "Maximum time %d seconds\n", r->twensec/20 );
-  fprintf(r->logfd, "Write buffers, %d\n", r->diskbufs );
+  fprintf(r->logfd, "Write buffers, %d\n", r->ringbufs );
   fprintf(r->logfd, "Data taking mode, %d\n", r->mode );
   fflush(r->logfd);
 }
@@ -624,7 +642,7 @@ int on;
 
    Its important that we know the precise time the data was taken.
    A one second timing pulse is provided to trigger the hardware to start
-   dumping data. From solaris we need to arm this trigger.  The start time 
+   dumping data. From the OS we need to arm this trigger.  The start time 
    is encoded in the filenames. But it takes some time to open files, valloc 
    and mlock all the buffers.  
 
@@ -656,9 +674,8 @@ time_t ttt;
 
 pusage()
 {
-  fprintf( stderr, "Usage: radar -dir d [-dir d]... [-mode mode] [-secs sec] [-step sec] [-cycles c] [-files ff] [-rings r] [-nopack]\n");
+  fprintf( stderr, "Usage: pfs_radar -dir d [-dir d]... [-mode mode] [-secs sec] [-step sec] [-cycles c] [-files f] [-rings r] [-nopack]\n");
   fprintf( stderr, "                                             (defaults)\n");
-  /*  fprintf( stderr, "  -mode mode  0: 1c1b, 2: 1c2b, 4: 1c4b, 6: 1c8b, 8: 2c1b, 10: 2c2b, 12: 2c4b\n");*/
   fprintf( stderr, "  -mode mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n");
   fprintf( stderr, "  -secs sec   number of seconds of data to take (3600)\n");
   fprintf( stderr, "  -step sec   timestep between A/D cycles (0)\n");
