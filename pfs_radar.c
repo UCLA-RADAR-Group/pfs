@@ -9,7 +9,7 @@
 *       [-start yyyy,mm,dd,hh,mn,sc] 
 *       [-secs sec] [-step sec] [-cycles c] 
 *       [-files f] [-rings r] 
-*       [-bytes b] [-log l]
+*       [-bytes b] [-log l] [-code len]
 *       -dir d [-dir d]... 
 *
 *  input:
@@ -24,12 +24,15 @@
 *  and writes the data onto disk.  
 *
 *  compile with 
-*  gcc -O2 -o pfs_radar -I/opt/EDTpcd pfs_radar.c /opt/EDTpcd/libedt.c -lthread
+*  gcc -O2 -o pfs_radar -I/opt/EDTpcd pfs_radar.c /opt/EDTpcd/libedt.c -lpthread
 *
 *******************************************************************************/
 
 /* 
    $Log$
+   Revision 1.4  2000/11/01 02:17:42  margot
+   Replaced -mode with -m for consistency.
+
    Revision 1.3  2000/10/30 22:03:40  margot
    Stop time now based on clock rather than buffer count.
 
@@ -49,19 +52,26 @@
 
 */
 
-#include <stdlib.h> 
-#include <dirent.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <time.h>
-#include <thread.h>
 #include <termios.h>
 #include <sys/time.h>
 #include <sys/procfs.h>
+#include <pthread.h>
+
+
+#ifdef SOLARIS 
 #include <sys/priocntl.h>
 #include <sys/rtpriocntl.h>
 #include <sys/tspriocntl.h>
+#else
+#include <stdlib.h> 
+#endif
 
+#include "fcntl.h"
 #include "edtinc.h"
+#include "multifile.h"
 
 /* revision control variable */
 static char const rcsid[] = 
@@ -70,12 +80,11 @@ static char const rcsid[] =
 void schedule_rt( int );
 
 struct DISKWRITE { /* one of these for each diskbuffer allocated */
-  char name[80];
-  int fd;
+  struct MULTIFILE *fd;
+  int tape_fd;
   int len;
-  int offset;
   char *out;
-  thread_t proc;
+  pthread_t proc;
 };
 
 struct RADAR { /* structure that holds the buffers and configuration */
@@ -87,7 +96,11 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int cycles;
   int ringbufs;
   int nfiles;
-  struct DISKWRITE *dw;
+  char *dir;     /* disk directory if selected */ 
+  char *istape;  /* tape device if selected */ 
+  int dw_count;  /* current index into dw_multi */
+  int dw_multi;  /*  ->out has size of dw_multi*ameg */
+  struct DISKWRITE dw[2];
   unsigned short **rings;
   time_t start;
   time_t stop;
@@ -99,14 +112,9 @@ struct RADAR { /* structure that holds the buffers and configuration */
   int pack;
 } radar;
 
-struct DIRLIST {
-  struct DIRLIST *next;
-  char name[80];
-};
-
 #define AMEG (1024*1024)	/* default size of edt ring buffer */
-#define RINGBUFS  8		/* default number of one meg edt ring buffers */
-#define SECS   3600		/* default number of seconds to take */
+#define RINGBUFS  64		/* default number of one meg edt ring buffers */
+#define SECS   9000		/* default number of seconds to take */
 #define AFEWSECS  3		/* interval bw key pressed and toggle EDT bit */
 
 int ctlc_flag = 0;
@@ -114,17 +122,20 @@ int ctlc_flag = 0;
 int main(int argc, char *argv[])
 {
   int i,cycle;
-  unsigned char *p;
+  char *p;
+  unsigned char *data;
   struct DISKWRITE *w;
   struct DISKWRITE *wlast;
   int dcount;
   void *disk_write();
   struct RADAR *r;
-  struct DIRLIST *dirhead, *dir;
   unsigned int off=0x00;
   unsigned int on=0x01;
   struct tm go;
   int time_set = 0;
+
+  long long size;
+  long  lcode = 63, lfft = 1024;
 
 #ifdef TIMER
   struct timeval   now;
@@ -141,9 +152,13 @@ int main(int argc, char *argv[])
   r->secs = SECS;
   r->step = 0;
   r->cycles = 1;
-  w = NULL;
+  r->nfiles = 40;
+  r->dw_multi = 20;
+  w = &r->dw[0];
+  wlast = NULL;
+  r->istape = NULL;
 
-  dirhead = NULL;
+  r->dir = NULL;
 
   /* process the command line */
   for( i=1; i<argc; i++ ) {
@@ -187,13 +202,14 @@ int main(int argc, char *argv[])
 	pusage();
       } else time_set = 1;
     } else if( strncasecmp( p, "-dir", strlen(p) ) == 0 ) {
-      p = argv[++i];
-      dir = (struct DIRLIST *)malloc( sizeof(struct DIRLIST));
-      strcpy( dir->name, p );
-      dir->next = dirhead;
-      dirhead = dir;
-      if( access( dir->name, W_OK|X_OK )) {
-        fprintf(stderr, "unable to access directory %s\n", dir->name );
+      if( r->dir ) {
+        fprintf(stderr, "one -dir switch only\n" );
+        pusage();
+      }
+        
+      r->dir = argv[++i];
+      if( access( r->dir, W_OK|X_OK )) {
+        fprintf(stderr, "unable to access directory %s\n", r->dir );
         pusage();
       }
     } else if( strncasecmp( p, "-rings", strlen(p) ) == 0 ) {
@@ -213,8 +229,25 @@ int main(int argc, char *argv[])
       strcpy( r->log, p);
     } else if( strncasecmp( p, "-nopack", strlen(p) ) == 0 ) {
       r->pack = 0;
-    }
+    } else if( strncasecmp( p, "-tape", strlen(p) ) == 0 ) {
+      if( r->istape ) {
+        fprintf(stderr, "one -tape switch only\n" );
+        pusage();
+      }
+      r->istape = argv[++i];
+    } else if( strncasecmp( p, "-code", strlen(p) ) == 0 ) {
+      p = argv[++i];
+      if(( lcode = atoi(p))<=0 ) {
+        fprintf(stderr, "bad value for -code\n");
+        pusage();
+      }
+    }       
   }
+
+  /* set maximum size of individual datafiles */
+  size = lcode * lfft;
+  while (size < 1000000000) { size = size * 2; }
+  multi_config_maxfilesize ((long long) size); 
 
   /* check that sampling mode is valid */
   switch (r->mode)
@@ -230,8 +263,15 @@ int main(int argc, char *argv[])
   if (r->cycles > 1 && r->step < r->secs + AFEWSECS)
     {
       fprintf(stderr,"Step size must be bigger than duration of A/D\n");
+      set_kb(0);
       exit(1);
     }
+
+  if( r->dir && r->istape ) {
+      fprintf(stderr,"Cant have disk and tape selected at once\n");
+      set_kb(0);
+      exit(1);
+  }
 
   if( r->ringbufs <=0 )
     r->ringbufs = RINGBUFS;
@@ -239,24 +279,25 @@ int main(int argc, char *argv[])
   if( r->ameg <=0 )
     r->ameg = AMEG;
 
-  if( !dirhead ) {
-    fprintf(stderr, "At least one -dir switch is required\n");
+  if( !(r->dir || r->istape) ) {
+    fprintf(stderr, "At least one -dir switch or -tape switch is required\n");
     pusage();
   }
   
   /* set scheduling priority */
   schedule_rt(2); 
-  /* start control-c interrupt handler */
-  set_kb(1);
 
   printf("Starting the Portable Fast Sampler\n");
 
   /* open edt device */
-  if ((r->edt = edt_open("pcd", 0)) == NULL)
+
+  if ((r->edt = edt_open("edt", 0)) == NULL)
     {
       perror("edt_open") ;
+      set_kb(0);
       exit(1) ;
     }
+  set_kb(1);
 
   /* block trigger immediately */
   edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1));
@@ -300,10 +341,11 @@ int main(int argc, char *argv[])
       r->stop  = r->start + r->secs;
       r->startmone = r->start - 1;
       r->next = r->start + r->step;
+      set_kb(1);
 
       /* obtain time string and open files */
       get_tms(r->start,r->timestr); 
-      open_files(r, dirhead);
+      open_files(r);
 
       fprintf(stdout  , "\nCycle %d will start at %s\n" , cycle, r->timestr );
       fprintf(r->logfd, "\nCycle %d starting at %s\n" , cycle, r->timestr );
@@ -339,11 +381,14 @@ int main(int argc, char *argv[])
 	  break;
 	if (time(NULL) >= r->stop)
 	  break;
-	if(!(p = edt_wait_for_buffers( r->edt, 1)))
+ 	if(!(data = edt_wait_for_buffers( r->edt, 1)))
 	  printf("error \n");
 	else {
-	  if( i%100 == 0 )
-	    printf("i = %d count = %d\n", i, edt_done_count(r->edt));
+	  if( i%50 == 0 ) {
+	    printf("\ni = %d count = %d\n", i, edt_done_count(r->edt));
+            fflush( stdout );
+          }
+	  fprintf(stderr,".");
 	  if( edt_ring_buffer_overrun(r->edt)) {
 	    printf("overrun %d\n",i );
 	    fprintf(r->logfd, "overrun %d\n" , i );
@@ -358,34 +403,59 @@ int main(int argc, char *argv[])
 	    then.tv_sec = now.tv_sec;
 	    then.tv_usec = now.tv_usec;
 #endif TIMER
-	    wlast = w;
-	    w = &r->dw[dcount];
 
 	    /* copy data from EDT to disk write output buffer */
-	    memcpy(w->out,p,w->len);
 
-	    if (wlast && wlast->proc)
-	      if(thr_join( wlast->proc, NULL, NULL ))
-		perror("thr_join");
-	    if( thr_create( NULL, 0, disk_write, w, THR_BOUND, &w->proc ))
-	      perror("do_write");
-	    if( ++dcount >=r->ringbufs )
-	      dcount = 0;
+	    memcpy(&w->out[r->dw_count*r->ameg], data, r->ameg);
+            if( ++r->dw_count >= r->dw_multi ) {
+              r->dw_count = 0;
+
+  	      if( wlast && wlast->proc)
+	        if(pthread_join( wlast->proc, NULL ))
+                  perror("pthread_join");
+	      if( pthread_create( &w->proc, NULL, disk_write, w ))
+	        perror("pthread_create");
+
+	      wlast = w;
+              if( w == &r->dw[0] )
+  	        w = &r->dw[1];
+              else
+  	        w = &r->dw[0];
+            }
 	  }
 	}
       }
-      
-      if( ctlc_flag )
-	fprintf(r->logfd, "Stopped by user, read %d buffers\n\n\n", i );
-      else
-	fprintf(r->logfd, "Finished, read %d buffers\n\n\n", i );
 
-#ifndef DEBUF      
-      for( i=0; i< r->ringbufs; i++ ) {
-	w = &r->dw[i];
-	thr_join( w->proc, NULL, NULL );
+      if( ctlc_flag ) {
+	printf("\nStopped by user, read %d buffers\n\n\n", i );
+	fprintf(r->logfd, "Stopped by user, read %d buffers\n\n\n", i );
+      } else {
+	printf("\nFinished, read %d buffers\n\n\n", i );
+	fprintf(r->logfd, "Finished, read %d buffers\n\n\n", i );
       }
-#endif      
+      
+      if( wlast && wlast->proc)
+        if(pthread_join( wlast->proc, NULL ))
+          perror("pthread_join");
+
+      wlast = NULL;
+
+      if( r->dw_count > 0 ) {
+
+        printf("writing last buffer to disk\n");
+        fflush(stdout);
+
+        w->len = r->dw_count*r->ameg;
+        if( pthread_create( &w->proc, NULL, disk_write, w ))
+           perror("pthread_create");
+
+        if(pthread_join( w->proc, NULL ))
+          perror("pthread_join");
+
+        w->len = r->dw_multi*r->ameg;
+        r->dw_count = 0;
+      }
+      
       edt_stop_buffers( r->edt);
       /* clear trigger */
       edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1)); 
@@ -405,20 +475,27 @@ struct DISKWRITE *w;
 {
   int writ;
   int k;
-  long long offset;
-
-  /*
-  if((writ = pwrite( w->fd, w->out, w->len, w->offset ))!= w->len ) 
-    printf(" disk write buffer number %d\n", writ );
-  else
-    w->offset += writ;
-  */
-
-  if((writ = write( w->fd, w->out, w->len))!= w->len ) 
-    printf(" disk write error: could only write %d bytes\n", writ );
-
+  
+  if( w->tape_fd >= 0 )
+    tape_write( w );
+  else {
+    if((writ = multi_write( w->fd, w->out, w->len))!= w->len ) 
+      printf(" disk write error: could only write %d bytes\n", writ );
+  }
+    
   return(0);
 }
+
+tape_write(w)
+struct DISKWRITE *w;
+{
+  int writ;
+
+  if(( writ = write( w->tape_fd, w->out, w->len )) != w->len )
+      printf(" tape write error: could only write %d bytes\n", writ );
+}
+
+#ifdef SOLARIS
 
 /* courtesy of Stuart Anderson, swiped right out of proc_ut.c */
 
@@ -440,6 +517,7 @@ schedule_rt( int rt_priority )
     (void) strcpy (pcinfo.pc_clname, "RT");
     if (priocntl (0L, 0L, PC_GETCID, (caddr_t) &pcinfo) == -1L) {
 	perror ("PC_GETCID failed for realtime class");
+        set_kb(0);
 	exit (1);
     }
     
@@ -457,9 +535,16 @@ schedule_rt( int rt_priority )
     }
 }
 
+#else
+void
+schedule_rt( int rt_priority )
+{
+}
+#endif
+
 
 /* 
-  allocate output buffers using valloc and calling mlock
+  allocate output buffers using malloc and calling mlock
   r is the config structure
 */
 
@@ -469,30 +554,24 @@ struct RADAR *r;
   int pagesize, i, aout;
   struct DISKWRITE *w;
 
-  pagesize = sysconf(_SC_PAGESIZE);
   aout = r->ameg;
+
+#ifdef SOLARIS
+  pagesize = sysconf(_SC_PAGESIZE);
   if (aout%pagesize != 0) 
-    aout = (int) rint( (float) (aout / pagesize) ) * pagesize;
+    aout = (int) rint( (double) (aout / pagesize) ) * pagesize;
+#endif
 
-  if(!(r->dw = (struct DISKWRITE *)valloc( 
-     sizeof(struct DISKWRITE)*r->ringbufs))) {
-      fprintf(stderr, "bad malloc allocating buffer\n");
-      exit(1);
-  }
-
-  if( mlock( r->dw, sizeof(struct DISKWRITE)*r->ringbufs))
-    perror("failed to mlock");
-
-  for( i=0; i< r->ringbufs; i++ ) {
+  for( i=0; i<2; i++ ) {
     w = &r->dw[i];
-    if( !(w->out = ( char * ) valloc( aout ))) {
-      fprintf(stderr, "bad valloc allocating buffer\n");
+    if( !(w->out = ( char * ) malloc( aout*r->dw_multi ))) {
+      fprintf(stderr, "bad malloc allocating buffer\n");
+      set_kb(0);
       exit(1);
     }
- 
-    if( mlock( w->out, aout ))
+    if( mlock( w->out, aout*r->dw_multi ))
       perror("failed to mlock");
-
+    w->len = r->ameg*r->dw_multi;
   }
 }
 
@@ -502,32 +581,36 @@ struct RADAR *r;
   head is the linked list of directory names to be used in opening files
 */
 
-open_files(r, head)
+open_files(r)
 struct RADAR *r;
-struct DIRLIST *head;
 {
-  int i;
+  int i, tape_fd;
   struct DISKWRITE *w;
-  struct DIRLIST *dir;
   char *tms;
-  int fd;
-  int offset;
+  struct MULTIFILE *fd;
   char name[80];
 
-  dir = head;
+  fd = NULL;
+  tape_fd = -1;
 
-  sprintf(name, "%s/data%s", dir->name, r->timestr );
-  if((fd = open(name, O_WRONLY|O_CREAT|O_LARGEFILE, 0664 )) < 0 )
-    perror("write file open");
-  offset = lseek(fd, 0L, SEEK_END );
+  if( r->istape ) {
+    if((tape_fd = open( r->istape, O_WRONLY, 0666 ))<0 ) {
+      fprintf( stderr, "cant open tape device %s\n", r->istape );
+      set_kb(0);
+      exit(1);
+    }
+    printf("opened tape device %s\n", r->istape );
 
-  for( i=0; i< r->ringbufs; i++ ) {
+  } else {
+
+    sprintf(name, "%s/data%s", r->dir, r->timestr );
+    fd = multi_open(name, O_WRONLY|O_CREAT, 0664, r->nfiles );
+  }
+
+  for( i=0; i< 2; i++ ) {
     w = &r->dw[i];
     w->fd = fd;
-    w->offset = offset;
-    w->len = r->ameg;
-    w->proc = NULL;
-    strncpy( w->name, name, 80 );
+    w->tape_fd = tape_fd;
   }
 }
 
@@ -543,7 +626,7 @@ struct RADAR *r;
   struct DISKWRITE *w;
 
   w = &r->dw[0];
-  close(w->fd);
+  multi_close(w->fd);
 }
 
 
@@ -566,7 +649,7 @@ get_tms(time_t time, char *string)
   
   
 /* 
-  allocate input buffers using valloc and calling mlock
+  allocate input buffers using malloc and calling mlock
   r is the config structure
 */
 
@@ -575,9 +658,11 @@ struct RADAR *r;
 {
   int i;
 
-  if(!(r->rings = (unsigned short **)valloc( 
+#ifdef SOLARIS
+  if(!(r->rings = (unsigned short **)malloc( 
      sizeof(unsigned short *)*r->ringbufs))) {
       fprintf(stderr, "bad malloc allocating ring buffer\n");
+      set_kb(0);
       exit(1);
   }
 
@@ -585,12 +670,14 @@ struct RADAR *r;
     perror("failed to mlock");
 
   for( i=0; i<r->ringbufs; i++ ) {
-    if( !(r->rings[i] = ( unsigned short *)valloc(r->ameg)))
-      printf("bad valloc\n");
+    if( !(r->rings[i] = ( unsigned short *)malloc(r->ameg)))
+      printf("bad malloc\n");
     else
       if( mlock( r->rings[i], r->ameg ))
         perror("mlock data");
   }
+#endif
+
   if( edt_configure_ring_buffers( r->edt, 
      r->ameg, r->ringbufs, EDT_READ, (void *)r->rings))
     edt_perror("configure edt card failure:");
@@ -599,11 +686,15 @@ struct RADAR *r;
 open_log(r)
 struct RADAR *r;
 {
-  if( r->log[0] == 0 )
-    strcpy(r->log, "radar.log");
+  if( r->log[0] == 0 ) {
+    sprintf(r->log, "%s/radar.log", r->dir );
+  } else {
+    sprintf(r->log, "%s/%s", r->dir, r->log );
+  }
 
   if( (r->logfd = fopen( r->log, "a+") )== NULL ) {
     fprintf( stderr, "Failed to open log file %s\n", r->log );
+      set_kb(0);
     exit(1);
   }
   fprintf(r->logfd, "%s\n",rcsid);
@@ -632,29 +723,33 @@ void do_ctlc()
   set_kb(0);
 }
 
-set_kb(on)
-int on;
+
+set_kb(makeraw)
+int makeraw;
 {
   struct termios t;
+  struct termios tstate;
+  static struct termios orig;
+  static int first = 1;
+  
+  if( first ) {
+    tcgetattr( 0, &orig );
+    first = 0;
+  }
+  memcpy( &tstate, &orig, sizeof(struct termios) );
 
-  if(ioctl(0,TCGETS,&t))
-    perror("ioctl:");
-
-  if(on) {
-    t.c_lflag &= ~ICANON;
-    t.c_lflag &= ~ECHO;
-    t.c_cc[VMIN] = 1;
-    t.c_cc[VTIME] = 0;
+  if(makeraw) {
+    tstate.c_lflag &= ~ICANON;
+    tstate.c_lflag &= ~ECHO;
+    tstate.c_cc[VMIN] = 1;
+    tstate.c_cc[VTIME] = 0;
+    tcsetattr( 0, TCSAFLUSH, &tstate );
     sigset( SIGINT, do_ctlc );
 
   } else {
-    t.c_lflag |= ICANON;
-    t.c_lflag |= ECHO;
+    tcsetattr( 0, TCSAFLUSH, &tstate );
     sigset( SIGINT, SIG_DFL );
   }
-
-  if(ioctl(0,TCSETS,&t))
-    perror("ioctl:");
 }
 
 /*
@@ -663,8 +758,8 @@ int on;
    Its important that we know the precise time the data was taken.
    A one second timing pulse is provided to trigger the hardware to start
    dumping data. From the OS we need to arm this trigger.  The start time 
-   is encoded in the filenames. But it takes some time to open files, valloc 
-   and mlock all the buffers.  
+   is encoded in the filenames. But it takes some time to open files, malloc 
+   all the buffers.  
 
    Heres how we handle it.
 
@@ -673,23 +768,29 @@ int on;
    - A start time in seconds is computed by adding an offset of AFEWSECS
      to the current one second time from time(NULL); 
    - Then the files are opened, memory is allocated and log file prepared.
-   - Then the process polls the time() function till one second before the 
-     start time by polling usleep(100), Suprisingly, this takes very little cpu.
-   - Then we usleep(500000), a half a second.
+   - wait till 0.5 seconds before the requested time using nanosleep
    - Then enable data taking.
    - Then arm the trigger.
 
 */
 
-/* wait till 0.5 sec before expected pulse */
+/* wait till 0.501 sec before expected pulse */
 
 wait_till_start( ttt )
 time_t ttt;
 {
-  while( time(NULL) < ttt)
-    usleep(100);
+  double delay;
+  struct timeval cur;
+  struct timespec nano;
 
-  usleep(500000);
+  gettimeofday( &cur, NULL );
+  delay =  (double)ttt - cur.tv_sec  - cur.tv_usec*1.0e-6 + 0.499;
+  nano.tv_sec = (int)delay;
+  nano.tv_nsec = (int)((delay - nano.tv_sec)*1.0e9);
+  
+/*  fprintf(stderr,"nano %d %d\n",nano.tv_sec,nano.tv_nsec); */
+  nanosleep( &nano, NULL ); 
+
 }
 
 pusage()
@@ -698,6 +799,7 @@ pusage()
   fprintf( stderr, "                                             (defaults)\n");
   fprintf( stderr, "  -m mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\n");
   fprintf( stderr, "  -dir d      directory to use\n");
+  fprintf( stderr, "  -tape t     tape device to use\n");
   fprintf( stderr, "  -secs sec   number of seconds of data to take (3600)\n");
   fprintf( stderr, "  -step sec   timestep between A/D cycles (0)\n");
   fprintf( stderr, "  -cycles c   number of repeat cycles (1)\n");
@@ -705,7 +807,9 @@ pusage()
   fprintf( stderr, "  -files f    total number of files to open (1)\n");
   fprintf( stderr, "  -rings r    number of input buffers to use (8)\n");
   fprintf( stderr, "  -bytes b    size of input ring buffer (1048576 bytes)\n");
+  fprintf( stderr, "  -code len   code length\n");
   fprintf( stderr, "  -log l      log file name \n");
+  set_kb(0);
   exit(1);
 }
 
