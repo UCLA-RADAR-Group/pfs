@@ -19,6 +19,9 @@
 
 /* 
    $Log$
+   Revision 3.0  2003/02/25 22:00:59  cvs
+   Adapted to use Joseph Jao's byte unpacking.
+
    Revision 1.3  2002/04/27 20:19:17  margot
    Removed obsolete routines specific to Golevka Sampling Box.
 
@@ -142,27 +145,27 @@ int main(int argc, char *argv[])
   	  unpack_pfs_2c2b(buffer, rcp, bufsize);
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
+	      fprintf(stdout,"% 4.0d % 4.0d\n",rcp[i],rcp[i+1]);
 	  else
-	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+	    fprintf(stdout,"% 4.0d % 4.0d\n",rcp[0],rcp[1]);
 
 	  break;
 	case 2: 
 	  unpack_pfs_2c4b(buffer, rcp, bufsize);
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
+	      fprintf(stdout,"% 4.0d % 4.0d\n",rcp[i],rcp[i+1]);
 	  else
-	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+	    fprintf(stdout,"% 4.0d % 4.0d\n",rcp[0],rcp[1]);
 
 	  break;
 	case 3: 
 	  unpack_pfs_2c8b(buffer, rcp, bufsize); 
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
+	      fprintf(stdout,"% 4.0d % 4.0d\n",rcp[i],rcp[i+1]);
 	  else
-	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+	    fprintf(stdout,"% 4.0d % 4.0d\n",rcp[0],rcp[1]);
 
 	  break;
 	case 5:
@@ -171,10 +174,10 @@ int main(int argc, char *argv[])
 
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
+	      fprintf(stdout,"% 4.0d % 4.0d % 4.0d % 4.0d\n",
 		      rcp[i],rcp[i+1],lcp[i],lcp[i+1]);
 	  else
-	    fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
+	    fprintf(stdout,"% 4.0d % 4.0d % 4.0d % 4.0d\n",
 		    rcp[0],rcp[1],lcp[0],lcp[1]);
 
 	  break;
@@ -184,10 +187,10 @@ int main(int argc, char *argv[])
 
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
-	      fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
+	      fprintf(stdout,"% 4.0d % 4.0d % 4.0d % 4.0d\n",
 		      rcp[i],rcp[i+1],lcp[i],lcp[i+1]);
 	  else
-	    fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
+	    fprintf(stdout,"% 4.0d % 4.0d % 4.0d % 4.0d\n",
 		    rcp[0],rcp[1],lcp[0],lcp[1]);
 
 	  break;
