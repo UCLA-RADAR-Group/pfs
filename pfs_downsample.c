@@ -26,6 +26,10 @@
 
 /* 
    $Log$
+   Revision 3.3  2003/05/29 22:49:43  cvs
+   Fixed bug in bytestoskip: never initialized.
+   Fixed bug in printout of buffers used: must be integers.
+
    Revision 3.2  2003/05/12 21:22:05  cvs
    Fixed bug in myoptions.
 
@@ -449,7 +453,7 @@ void *iq_downsample (void *pdata)
   for (bcnt = nsamples / downsample; bcnt > 0; bcnt--)
   {
     if (mode == 32) {
-	for (j = 0, isf = 0.0, qsf = 0.0; j < downsample; j += 8, k += 8) {
+	for (j = 0, isf = 0.0, qsf = 0.0; j < downsample; j += 1, k += 8) {
 	  memcpy (&iq[0], &inbuf[k], 8);
 
 	  /* sum Is and Qs */
@@ -632,8 +636,6 @@ int 	*samplestoskip;
   errout: fprintf(stderr,"%s\n",rcsid);
           fprintf(stderr,"Usage: %s\n",USAGE1);
           fprintf(stderr,"%s",USAGE2);
-
-	  printf ("%c  %s \n", c, optarg);
 	  exit(1);
 }
 
