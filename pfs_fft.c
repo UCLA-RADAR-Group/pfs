@@ -10,7 +10,9 @@
 *              [-d downsampling factor] 
 *              [-r desired frequency resolution (Hz)] 
 *              [-n sum n transforms] 
+*              [-l (dB output)]
 *              [-t time series] 
+*              [-x freqmin,freqmax (Hz)]
 *              [-c channel] 
 *              [-o outfile] [infile]
 *
@@ -22,8 +24,10 @@
 *	the -r argument specifies the desired frequency resolution in Hz
 *       the -n argument specifies how many transforms to add
 *			(incoherent sum after fft)
+*       the -l argument specifies logarithmic (dB) output
 *	the -t option indicates that (sums of) transforms ought to be written
 *			one after the other until EOF
+*       the -x option specifies an optional range of output frequencies
 *       the -c argument specifies which channel (1 or 2) to process
 *
 *  output:
@@ -34,6 +38,8 @@
 
 /* 
    $Log$
+   Revision 1.1  2000/09/15 19:36:37  margot
+   Initial revision
 */
 
 #include <math.h>
@@ -62,7 +68,7 @@ void copy_cmd_line();
 void vector_power(float *data, int len);
 void swap_freq(float *data, int len);
 void zerofill(float *data, int len);
-void cmplxmul(float *in1, float *in2, float *out, int len);
+int  no_comma_in_string();	
 
 int main(int argc, char *argv[])
 {
@@ -74,13 +80,14 @@ int main(int argc, char *argv[])
   int bufsize;
 
   float freq;		/* frequency */
-  float freqmin=9950;	/* min frequency to output */
-  float freqmax=10050;  /* max frequency to output */
+  float freqmin;	/* min frequency to output */
+  float freqmax;	/* max frequency to output */
   double fsamp;		/* sampling frequency, MHz */
   double freqres;	/* frequency resolution, Hz */
   int downsample;	/* downsampling factor, dimensionless */
   int sum;		/* number of transforms to add, dimensionless */
   int timeseries;	/* process as time series, boolean */
+  int dB;		/* write out results in dB */
   int fftlen;		/* transform length, complex samples */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int chan;		/* channel to process (1 or 2) for dual pol data */
@@ -91,7 +98,7 @@ int main(int argc, char *argv[])
   int i,j,k,l;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&dB);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -190,6 +197,7 @@ int main(int argc, char *argv[])
 	  exit(-1);
 	}
       
+      /* downsample if needed */
       if (downsample)
 	for (k = 0, l = 0; k < 2*fftlen; k += 2, l += 2*downsample)
 	  for (j = 0; j < 2*downsample; j+=2)
@@ -200,6 +208,7 @@ int main(int argc, char *argv[])
       else
 	memcpy(fftbuf,outbuf,2*fftlen*sizeof(float));
 
+      /* transform, swap, and compute power */
       fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)outbuf);
       swap_freq(outbuf,fftlen); 
       vector_power(outbuf,fftlen);
@@ -212,6 +221,7 @@ int main(int argc, char *argv[])
   total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2; 
 
   /* write output */
+  /* either time series */
   if (timeseries)
     {
       if (fftlen != fwrite(total,sizeof(float),fftlen,fpoutput))
@@ -220,23 +230,36 @@ int main(int argc, char *argv[])
       counter++;
       goto loop;
     }
+  /* or limited frequency range */
   else
-    for (i = 0; i < fftlen; i++)
-      {
-	freq = (i-fftlen/2)*freqres;
-	/* if (freq >= freqmin && freq <= freqmax) */
-	fprintf(fpoutput,"%.3f %f\n",freq,10*log10(total[i]));
-	/* fprintf(fpoutput,"%.3f %.0f\n",freq,total[i]);  */
-	
-      }
-
+    if (freqmin !=0 || freqmax != 0)
+      for (i = 0; i < fftlen; i++)
+	{
+	  freq = (i-fftlen/2)*freqres;
+	  if (freq >= freqmin && freq <= freqmax) 
+	    if (dB)
+	      fprintf(fpoutput,"%.3f %f\n",freq,10*log10(total[i]));
+	    else
+	      fprintf(fpoutput,"%.3f %.0f\n",freq,total[i]);  
+	}
+  /* or standard output */
+    else
+      for (i = 0; i < fftlen; i++)
+	{
+	  freq = (i-fftlen/2)*freqres;
+	  if (dB)
+	    fprintf(fpoutput,"%.3f %f\n",freq,10*log10(total[i]));
+	  else
+	    fprintf(fpoutput,"%.3f %.0f\n",freq,total[i]);  
+	}
+  
   return 0;
 }
 
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan,freqmin,freqmax,dB)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -248,6 +271,9 @@ int     *downsample;
 int     *sum;
 int     *timeseries;
 int     *chan;
+float   *freqmin;
+float   *freqmax;
+int     *dB;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -260,8 +286,8 @@ int     *chan;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-t time series] [-c channel] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lx:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-c channel] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -278,6 +304,9 @@ int     *chan;
   *sum = 1;
   *timeseries = 0;
   *chan = 1;
+  *dB = 0;		/* default is linear output */
+  *freqmin = 0;		/* not set value */
+  *freqmax = 0;		/* not set value */
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -319,9 +348,28 @@ int     *chan;
 	arg_count += 2;
 	break;
 	
+      case 'l':
+	*dB = 1;
+	arg_count += 1;
+	break;
+
       case 't':
 	*timeseries = 1;
 	arg_count += 1;
+	break;
+
+      case 'x':
+	if ( no_comma_in_string(optarg) )
+	  {
+	    fprintf(stderr,"\nERROR: require comma between -x args\n");
+	    goto errout;
+	  }
+	else
+	  {
+	    if (sscanf(optarg,"%f,%f",freqmin,freqmax) != 2)
+	      goto errout;
+	    arg_count += 2;          /* two command line arguments */
+	  }
 	break;
 	
       case '?':			 /*if not in myoptions, getopt rets ? */
@@ -337,6 +385,17 @@ int     *chan;
   if (*mode == 0) goto errout;
   /* must specify a valid channel */
   if (*chan != 1 && *chan != 2) goto errout;
+  /* some combinations not implemented yet */
+  if (*timeseries && *dB) 
+    {
+      fprintf(stderr,"Cannot have -t and -l simultaneously yet\n");
+      exit(1);
+    }
+  if (*timeseries && (*freqmin != 0 || *freqmax !=0)) 
+    {
+      fprintf(stderr,"Cannot have -t and -l simultaneously yet\n");
+      exit(1);
+    }
 
   return;
 
@@ -446,4 +505,24 @@ void zerofill(float *data, int len)
     data[i] = 0.0;
 
   return;
+}
+
+/******************************************************************************/
+/*	no_comma_in_string						      */
+/******************************************************************************/
+int no_comma_in_string(params)
+char    params[];               /* parameter string */
+{
+  /* searches for a comma in the parameter string which indicates
+     multiple arguements; returns TRUE if there is no comma
+  */
+  int no_comma;         /* flag false if comma found */
+  int index;            /* index to string */
+
+  no_comma = 1;
+
+  for (index = 0; no_comma && params[index]!='\0' ; index++)
+    no_comma = (params[index] == ',') ? 0 : no_comma;
+
+  return(no_comma);
 }
