@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.0  2003/02/22 07:48:08  cvs
+   Switch to Joseph Jao's byte unpacking.
+
    Revision 1.12  2002/12/28 07:42:59  cvs
    Added capability to swap I and Q prior to FFT.
 
@@ -199,7 +202,7 @@ int main(int argc, char *argv[])
   nsamples = bufsize * smpwd / 4;
   buffer    = (char *)  malloc(bufsize);
   fftinbuf  = (float *) malloc(2 * fftlen * sizeof(float));
-  fftoutbuf = (float *) malloc(2 * nsamples * sizeof(float));
+  fftoutbuf = (float *) malloc(2 * fftlen * sizeof(float));
   total = (float *) malloc(fftlen * sizeof(float));
   rcp   = (char *)  malloc(2 * nsamples * sizeof(char));
   if (!buffer || !fftinbuf || !fftoutbuf || !total || !rcp)
