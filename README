@@ -2,24 +2,24 @@ These programs control the operation of the Portable Fast Sampler
 (PFS) systems.  They also provide tools for initial data analysis 
 (unpacking, digital filtering, spectral analysis, de-hopping, etc).
 
-What you will need:
+To download and install, read the file INSTALL.
+
+What you may need in addition:
 
 -the EDT driver from www.edt.com, installed in its default /opt/EDTpcd location
--the FFTW library from www.fftw.org
--other tools that should be part of any standard Unix/Linux distribution: 
+-tools that should be part of any standard Unix/Linux distribution: 
 CVS/RCS revision control, make, GNU compilers.
 
 If you want to take data with correct timestamps, please make sure
 that the Network Time Protocol (NTP) is installed and properly
 configured.
 
-To install, download the latest source tree from the software repository:
+Please send comments and bug reports to:
 
-cvs -d:pserver:cvs@planets.gps.caltech.edu:/home/cvsroot checkout src/pfs
-
-Customize the include file Makefile.inc according to local settings if
-need be, then type "make" and "make install".
-
-Please send comments and bug reports to 
-margot@gps.caltech.edu
-
+Jean-Luc Margot
+Department of Astronomy
+Cornell University
+304 Space Sciences Bldg
+Ithaca, NY 14853
+607 255 1810 
+jlm@astro.cornell.edu
