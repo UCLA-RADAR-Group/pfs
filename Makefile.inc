@@ -20,7 +20,7 @@ FLIB    = -lg2c
 XLIB    = -L/usr/X11R6/lib -lX11
 #
 # This is where you would like the software to be installed 
-DEST = /home/pfs
+DEST = $(HOME)
 DESTDIR = $(DEST)/bin
 DESTLIB = $(DEST)/lib
 #
