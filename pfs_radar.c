@@ -8,8 +8,8 @@
 *       pfs_radar 
 *       [-start yyyy,mm,dd,hh,mn,sc] 
 *       [-secs sec] [-step sec] [-cycles c] 
-*       [-files f] [-rings r] 
-*       [-bytes b] [-log l] [-code len]
+*       [-files f] [-rings r] [-bytes b]
+*	[-log l] [-code len] [-comment "<msg>"]
 *       -dir d [-dir d]... 
 *
 *  input:
@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.5  2003/01/08 18:33:20  cvs
+   Lock file in /tmp/pfs.lock
+
    Revision 2.4  2003/01/08 03:51:52  cvs
    Better handling of CTRL-C for multiple cycles.
    Preventing multiple instances of pfs_radar with lock file pfs.lock.
@@ -129,6 +132,7 @@ struct RADAR { /* structure that holds the buffers and configuration */
   time_t startmone;
   char timestr[80];
   char log[80];
+  char comment[200];
   FILE *logfd;
   int pack;
 } radar;
@@ -273,6 +277,12 @@ int main(int argc, char *argv[])
         fprintf(stderr, "bad value for -fft\n");
         pusage();
       }
+    }  else if( strncasecmp( p, "-comment", strlen(p) ) == 0 ) {
+      p = argv[++i];
+      strcpy( r->comment, p);
+    }  else {
+      fprintf(stderr, "Invalid Option: [%s]\n", p);
+      pusage();
     }
   }
 
@@ -758,6 +768,7 @@ struct RADAR *r;
   fprintf(r->logfd, "Data taking duration %d seconds\n", r->secs );
   fprintf(r->logfd, "Write buffers, %d\n", r->ringbufs );
   fprintf(r->logfd, "Data taking mode, %d\n", r->mode );
+  fprintf(r->logfd, "Operator comment: *** %s ***\n", r->comment );
   fflush(r->logfd);
 }
 
@@ -851,7 +862,7 @@ time_t ttt;
 pusage()
 {
   fprintf( stderr, "%s\n", rcsid);
-  fprintf( stderr, "Usage: pfs_radar -m mode -dir d [-secs sec] [-step sec] [-cycles c] [-start yyyy,mm,dd,hh,mm,ss]\n");
+  fprintf( stderr, "Usage: pfs_radar -m mode -dir d [-secs sec] [-step sec] [-cycles c] [-comment \"<msg>\"] [-start yyyy,mm,dd,hh,mm,ss]\n"); 
   fprintf( stderr, "                                             (defaults)\n");
   fprintf( stderr, "  -m mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\n");
   fprintf( stderr, "  -dir d      directory to use\n");
@@ -866,6 +877,7 @@ pusage()
   fprintf( stderr, "  -code len   code length (7812500)\n");
   fprintf( stderr, "  -fft len    fft length (128)\n");
   fprintf( stderr, "  -log l      log file name \n");
+  fprintf( stderr, "  -comment \"<msg>\"	operating message in \" \"\n");
   set_kb(0);
   exit(1);
 }
