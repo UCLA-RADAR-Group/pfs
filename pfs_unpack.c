@@ -4,11 +4,13 @@
 *  This programs unpacks data from the portable fast sampler
 *
 *  usage:
-*  	pfs_unpack -m mode [-o outfile] [infile]
+*  	pfs_unpack -m mode [-c channel] [-o outfile] [infile]
+*              
 *
 *  input:
 *       the input parameters are typed in as command line arguments
 *	the -m option specifies the data acquisition mode
+*       the -c argument specifies which channel (1 or 2) to process
 *
 *  output:
 *	the -o option identifies the output file, stdout is default
@@ -17,6 +19,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2000/10/30 21:24:35  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -54,10 +59,11 @@ int main(int argc, char *argv[])
   float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
+  int chan;		/* channel to process (1 or 2) for dual pol data */
   int i;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode);
+  processargs(argc,argv,&infile,&outfile,&mode,&chan);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -129,9 +135,11 @@ int main(int argc, char *argv[])
 	  break;
 	case 5:
 	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+	  if (chan == 2) memcpy(rcp, lcp, outbufsize);
 	  break;
 	case 6:
 	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+	  if (chan == 2) memcpy(rcp, lcp, outbufsize);
 	  break;
 	default: 
 	  fprintf(stderr,"mode not implemented yet\n"); 
@@ -149,12 +157,13 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode)
+void	processargs(argc,argv,infile,outfile,mode,chan)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
 char	**outfile;		 /* output file name */
 int     *mode;
+int     *chan;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_unpack program:
@@ -167,8 +176,8 @@ int     *mode;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_unpack -m mode [-o outfile] [infile] ";
+  char *myoptions = "m:c:o:"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_unpack -m mode [-c channel] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -179,28 +188,34 @@ int     *mode;
   *outfile = "-";
 
   *mode  = 0;                /* default value */
+  *chan  = 1;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
   { 
     switch (c) 
-    {
+      {
       case 'o':
- 	       *outfile = optarg;	/* output file name */
-               arg_count += 2;		/* two command line arguments */
-	       break;
-
+	*outfile = optarg;	/* output file name */
+	arg_count += 2;		/* two command line arguments */
+	break;
+	
       case 'm':
- 	       sscanf(optarg,"%d",mode);
-               arg_count += 2;		/* two command line arguments */
-	       break;
-	    
+	sscanf(optarg,"%d",mode);
+	arg_count += 2;		/* two command line arguments */
+	break;
+	
+      case 'c':
+	sscanf(optarg,"%d",chan);
+	arg_count += 2;
+	break;
+	
       case '?':			 /*if not in myoptions, getopt rets ? */
-               goto errout;
-               break;
-    }
+	goto errout;
+	break;
+      }
   }
-
+  
   if (arg_count < argc)		 /* 1st non-optioned param is infile */
     *infile = argv[arg_count];
 
