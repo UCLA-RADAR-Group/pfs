@@ -38,6 +38,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2000/10/30 05:38:44  margot
+   Added variable nsamples.
+
    Revision 1.2  2000/09/15 22:10:38  margot
    Added -l and -x options.
 
@@ -50,6 +53,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include "unpack.h"
 #include <fftw.h>
 
@@ -100,6 +104,7 @@ int main(int argc, char *argv[])
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
+  int swap = 1;		/* swap frequencies at output of fft routine */
 
   fftw_plan p;
   int i,j,k,l;
@@ -130,6 +135,7 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; break; 
     case  5: smpwd = 4; break;
     case  6: smpwd = 2; break;
+    case  8: smpwd = 2; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -154,12 +160,12 @@ int main(int argc, char *argv[])
     
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
-  rcp = (float *) malloc(2 * nsamples * sizeof(float));
-  lcp = (float *) malloc(2 * nsamples * sizeof(float));
+  buffer = (char *)  malloc(bufsize);
   fftbuf = (float *) malloc(2 * fftlen * sizeof(float));
   total  = (float *) malloc(fftlen * sizeof(float));
-  buffer = (char *)  malloc(bufsize);
-  if (!buffer)
+  rcp = (float *) malloc(2 * nsamples * sizeof(float));
+  lcp = (float *) malloc(2 * nsamples * sizeof(float));
+  if (!lcp)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -206,6 +212,9 @@ int main(int argc, char *argv[])
 	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
 	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
 	  break;
+     	case 8: 
+	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  break;
 	default: 
 	  fprintf(stderr,"Mode not implemented yet\n"); 
 	  exit(-1);
@@ -224,7 +233,7 @@ int main(int argc, char *argv[])
 
       /* transform, swap, and compute power */
       fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)rcp);
-      swap_freq(rcp,fftlen); 
+      if (swap) swap_freq(rcp,fftlen); 
       vector_power(rcp,fftlen);
 
       /* sum transforms */
@@ -302,7 +311,7 @@ int     *dB;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "m:f:d:r:n:tc:o:lx:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-c channel] [-o outfile] [infile]";
+  char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
