@@ -38,6 +38,9 @@
 
 /* 
    $Log$
+   Revision 1.2  2000/09/15 22:10:38  margot
+   Added -l and -x options.
+
    Revision 1.1  2000/09/15 19:36:37  margot
    Initial revision
 */
@@ -73,11 +76,16 @@ int  no_comma_in_string();
 int main(int argc, char *argv[])
 {
   int mode;
-  char *buffer;
+  int bufsize;		/* size of read buffer */
+  char *buffer;		/* buffer for packed data */
+  float *rcp,*lcp;	/* buffer for unpacked data */
+  int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  int nsamples;		/* # of complex samples in each buffer */
+  int levels;		/* # of levels for given quantization mode */
+
   float *outbuf;
   float *fftbuf;
   float *total;
-  int bufsize;
 
   float freq;		/* frequency */
   float freqmin;	/* min frequency to output */
@@ -89,7 +97,6 @@ int main(int argc, char *argv[])
   int timeseries;	/* process as time series, boolean */
   int dB;		/* write out results in dB */
   int fftlen;		/* transform length, complex samples */
-  int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
@@ -146,11 +153,13 @@ int main(int argc, char *argv[])
   fprintf(stderr,"\n");
     
   /* allocate storage */
-  buffer = (char *)  malloc(bufsize);
+  nsamples = bufsize * smpwd / 4;
+  rcp = (float *) malloc(2 * nsamples * sizeof(float));
+  lcp = (float *) malloc(2 * nsamples * sizeof(float));
   fftbuf = (float *) malloc(2 * fftlen * sizeof(float));
   total  = (float *) malloc(fftlen * sizeof(float));
-  outbuf = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-  if (!outbuf)
+  buffer = (char *)  malloc(bufsize);
+  if (!buffer)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -178,19 +187,24 @@ int main(int argc, char *argv[])
       switch (mode)
 	{
 	case -1:
-	  unpack_gsb(buffer, outbuf, bufsize); 
+	  unpack_gsb(buffer, rcp, bufsize); 
 	  break;
 	case 1:
-	  unpack_pfs_2c2b(buffer, outbuf, bufsize); 
+	  unpack_pfs_2c2b(buffer, rcp, bufsize); 
 	  break;
 	case 2: 
-	  unpack_pfs_2c4b(buffer, outbuf, bufsize);
+	  unpack_pfs_2c4b(buffer, rcp, bufsize);
 	  break;
 	case 3: 
-	  unpack_pfs_2c8b(buffer, outbuf, bufsize);
+	  unpack_pfs_2c8b(buffer, rcp, bufsize);
 	  break;
 	case 5:
-	  unpack_pfs_xc2b(buffer, outbuf, bufsize, chan, 0, 0, 1);
+	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
+	  break;
+	case 6: 
+	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+	  if (chan == 2) memcpy(rcp, lcp, 2 * nsamples * sizeof(float));
 	  break;
 	default: 
 	  fprintf(stderr,"Mode not implemented yet\n"); 
@@ -202,19 +216,20 @@ int main(int argc, char *argv[])
 	for (k = 0, l = 0; k < 2*fftlen; k += 2, l += 2*downsample)
 	  for (j = 0; j < 2*downsample; j+=2)
 	    {
-	      fftbuf[k]   += outbuf[l+j];
-	      fftbuf[k+1] += outbuf[l+j+1];
+	      fftbuf[k]   += rcp[l+j];
+	      fftbuf[k+1] += rcp[l+j+1];
 	    }
       else
-	memcpy(fftbuf,outbuf,2*fftlen*sizeof(float));
+	memcpy(fftbuf,rcp,2*fftlen*sizeof(float));
 
       /* transform, swap, and compute power */
-      fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)outbuf);
-      swap_freq(outbuf,fftlen); 
-      vector_power(outbuf,fftlen);
+      fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)rcp);
+      swap_freq(rcp,fftlen); 
+      vector_power(rcp,fftlen);
 
+      /* sum transforms */
       for (j = 0; j < fftlen; j++)
-	total[j] += outbuf[j];
+	total[j] += rcp[j];
     }
   
   /* set DC to average of neighboring values  */
