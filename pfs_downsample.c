@@ -26,6 +26,9 @@
 
 /* 
    $Log$
+   Revision 3.2  2003/05/12 21:22:05  cvs
+   Fixed bug in myoptions.
+
    Revision 3.1  2003/04/21 20:30:13  cvs
    Added option to skip a number of samples at the beginning of a file.
    Re-organized command-line options -b, -f, -s.
@@ -133,7 +136,7 @@ int main(int argc, char *argv[])
   float fudge;		/* scale fudge factor */
   int open_flags;	/* flags required for open() call */
   int samplestoskip;	/* number of complex samples to skip */
-  int bytestoskip;	/* number of bytes to skip */
+  int bytestoskip=0;	/* number of bytes to skip */
   int i;
 
   char   *outfile;	/* output file name */
@@ -183,15 +186,18 @@ int main(int argc, char *argv[])
   
   /* test size compatibility */ 
   if (filestat.st_size % 4 != 0)
-    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", filestat.st_size);
+    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", 
+	    filestat.st_size);
   if (filestat.st_size % downsample != 0)
-    fprintf(stderr,"Warning: file size %d is not a multiple of the downsampling factor\n", filestat.st_size);
+    fprintf(stderr,"Warning: file size %d not a multiple of dwnsmplng factor\n",
+	    filestat.st_size);
 
   /* skip samples if needed */
   if (samplestoskip != 0)
   {
     bytestoskip = 4 * samplestoskip / smpwd;
-    fprintf(stderr, "Skipping %d complex samples, equivalent to %d bytes\n", samplestoskip, bytestoskip);
+    fprintf(stderr, "Skipping %d complex samples, equivalent to %d bytes\n", 
+	    samplestoskip, bytestoskip);
     /* skip desired amount of bytes */
     if (bytestoskip != lseek(fdinput, bytestoskip, SEEK_SET))
       {
@@ -201,10 +207,10 @@ int main(int argc, char *argv[])
       }
     /* test new size compatibility */ 
     if ((filestat.st_size - bytestoskip) % 4 != 0)
-      fprintf(stderr,"Warning: file size %d with %d bytes skipped is not a multiple of 4\n", 
+      fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of 4\n",
 	      filestat.st_size,bytestoskip);
     if ((filestat.st_size - bytestoskip) % downsample != 0)
-      fprintf(stderr,"Warning: file size %d with %d bytes skipped is not a multiple of the downsampling factor\n", 
+      fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of dwnsmplng factor\n", 
 	      filestat.st_size,bytestoskip);
   }
 
@@ -218,7 +224,8 @@ int main(int argc, char *argv[])
   }
 
   /* compute dynamic range parameters */
-  fprintf(stderr,"Downsampling file of size %d KB by %d\n", (int) (filestat.st_size / 1000), downsample);
+  fprintf(stderr,"Downsampling file of size %d KB by %d\n", 
+	  (int) (filestat.st_size / 1000), downsample);
   maxvalue = maxunpack * sqrt(downsample);
   scale = fudge * 0.25 * 128 / maxvalue;
 
@@ -231,9 +238,9 @@ int main(int argc, char *argv[])
 
   /* compute buffer size */
   /* we need a multiple of the downsampling factor, or order 1 MB */
-  bufsize = 8 * (int) rint(1000000/downsample) * downsample;
+  bufsize = (int) rint(1000000.0/downsample) * downsample;
   fprintf(stderr,"Using %d buffers of size %d\n", 
-	  (filestat.st_size - bytestoskip) / bufsize, bufsize);
+	  (int) floor((filestat.st_size - bytestoskip) / bufsize), bufsize);
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
@@ -249,7 +256,8 @@ int main(int argc, char *argv[])
     channel2 = (char *) malloc(2 * bufsize * smpwd / 4 * sizeof(char));
   }
 
-  if (!channel1 || !channel2 || !buffer1 || !buffer2) fprintf(stderr,"Malloc error\n");
+  if (!channel1 || !channel2 || !buffer1 || !buffer2) 
+    fprintf(stderr,"Malloc error\n");
 
 
   if (nsamples % downsample != 0)
