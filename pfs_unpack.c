@@ -29,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 3.0  2003/02/22 02:09:08  cvs
+   Revised by Joseph Jao to speed unpacking.
+
    Revision 2.8  2002/09/29 17:58:23  cvs
    Added -p option for square-law detection and power output
 
@@ -171,9 +174,9 @@ int main(int argc, char *argv[])
   outbufsize = 2 * nsamples * sizeof(float);
   outbuf = (float *) malloc(outbufsize);
   buffer = (char *) malloc(bufsize);
-  rcp = (char *) malloc(bufsize);
+  rcp = (char *) malloc(2 * nsamples * sizeof(char));
 
-  if (rcp == NULL) 
+  if (rcp == NULL || outbuf == NULL || buffer == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -236,7 +239,7 @@ int main(int argc, char *argv[])
 	  exit(1);
 	}
       if (mode != 16 && mode != 32)
-	for (i = 0; i < bufsize; i++) 
+	for (i = 0; i < 2 * nsamples; i++) 
 	  outbuf[i] = (float) rcp[i];
       
 
@@ -260,7 +263,7 @@ int main(int argc, char *argv[])
 	{
 	  outbufsize = nsamples * sizeof(float);
 	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	    rcp[i] = rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1];
+	    outbuf[i] = outbuf[j]*outbuf[j]+outbuf[j+1]*outbuf[j+1];
 	}
       
       /* write data to output file */
