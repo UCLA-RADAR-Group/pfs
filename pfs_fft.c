@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.8  2002/04/27 20:22:47  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.7  2002/04/27 06:16:26  margot
    Added mode 16.
 
@@ -360,7 +363,7 @@ int     *dB;
 
   char *myoptions = "m:f:d:r:n:tc:o:lx:s:"; /* options to search for :=> argument*/
   char *USAGE1="pfs_fft -m mode [-f sampling frequency (MHz)] [-d downsampling factor] [-r desired frequency resolution (Hz)] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
-  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
+  char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
