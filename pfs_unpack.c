@@ -3,10 +3,12 @@
 *  $Id$
 *  This programs unpacks data from the portable fast sampler,
 *  optionally applying a phase rotation to compensate for a frequency offset.
+*  Default output is binary floating point quantities.
 *
 *  usage:
 *  	pfs_unpack -m mode 
-*                  [-a (ascii output)] 
+*                  [-a output ascii to stdout]
+*                  [-d (detect and output magnitude)] 
 *                  [-c channel] 
 *                  [-o outfile] [infile]
 *  for phase rotation, also specify
@@ -26,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 2.1  2002/05/12 13:42:26  cvs
+   Added mode 32 for floats.
+
    Revision 2.0  2002/05/02 05:54:16  cvs
    Added capability to apply phase rotation with -f and -x options.
    Added apply_linear_phase() function.
@@ -77,7 +82,7 @@ void apply_linear_phase(float *data, double freq, double time, double timeint, i
 int main(int argc, char *argv[])
 {
   struct stat filestat;	/* input file status structure */
-  int bufsize = 1048576;/* size of read buffer, default 1 MB, unless input file is smaller */
+  int bufsize = 1000000;/* size of read buffer, default 1 MB, unless input file is smaller */
   int outbufsize;	/* output buffer size */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
@@ -90,10 +95,11 @@ int main(int argc, char *argv[])
   int nsamples;		/* # of complex samples in each buffer */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int ascii;		/* text output */
+  int detect;		/* magnitude output */
   int i,j;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii,&fsamp,&foff);
+  processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii,&detect,&fsamp,&foff);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -120,6 +126,10 @@ int main(int argc, char *argv[])
   if (filestat.st_size < bufsize) bufsize = filestat.st_size;
   if (filestat.st_size % bufsize != 0) 
     bufsize = filestat.st_size / (int) rint(filestat.st_size / bufsize);
+  fprintf(stderr,"Unpacking file of size %d with %d byte buffers\n",
+	  filestat.st_size,bufsize);
+  if (filestat.st_size % bufsize != 0) 
+    fprintf(stderr,"Warning: not an integer number of buffers\n");
 
   switch (mode)
     {
@@ -135,7 +145,7 @@ int main(int argc, char *argv[])
     }
 
   /* allocate storage */
-  nsamples = bufsize * smpwd / 4;
+  nsamples = (int) rint(bufsize * smpwd / 4.0);
   outbufsize = 2 * nsamples * sizeof(float);
   buffer = (char *) malloc(bufsize);
   rcp = (float *) malloc(outbufsize);
@@ -200,17 +210,37 @@ int main(int argc, char *argv[])
 	  apply_linear_phase(rcp,foff,time,timeint,nsamples);
 	  time += timeint * nsamples;
 	}
+
+      /* optionally compute magnitude */
+      if (detect)
+	{
+	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
+	    rcp[i] = sqrt(rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1]);
+	}
       
       /* write data to output file */
       if (ascii)
 	{
-	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
-	    fprintf(stdout,"% .0f % .0f %.0f\n",rcp[j],rcp[j+1],
-		    sqrt(rcp[i]*rcp[i]+rcp[i+1]*rcp[i+1]));
+	  if (detect)
+	    for (i = 0; i < nsamples; i++)
+	      fprintf(stdout,"% .3f\n",rcp[i]);
+	  else
+	    for (i = 0, j = 0; i < nsamples; i++, j+=2)
+	      fprintf(stdout,"% .0f % .0f\n",rcp[j],rcp[j+1]);
 	}
       else
-	if (outbufsize != write(fdoutput,rcp,outbufsize))
-	  fprintf(stderr,"Write error\n");  
+	{
+	  if (detect)
+	    {
+	      if (outbufsize != write(fdoutput,rcp,outbufsize))
+		fprintf(stderr,"Write error\n");  
+	    }
+	  else
+	    {
+	      if (outbufsize/2 != write(fdoutput,rcp,outbufsize/2))
+		fprintf(stderr,"Write error\n");  
+	    }
+	}
     }
 
   return 0;
@@ -259,7 +289,7 @@ void apply_linear_phase(float *data, double freq, double time, double timeint, i
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,chan,ascii,fsamp,foff)
+void	processargs(argc,argv,infile,outfile,mode,chan,ascii,detect,fsamp,foff)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -267,6 +297,7 @@ char	**outfile;		 /* output file name */
 int     *mode;
 int     *chan;
 int     *ascii;
+int     *detect;
 double   *fsamp;
 double   *foff;
 {
@@ -281,10 +312,10 @@ double   *foff;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:c:o:af:x:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-o outfile] [infile] ";
+  char *myoptions = "m:c:o:adf:x:"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-o outfile] [infile] ";
   char *USAGE2="For phase rotation, also specify [-f sampling frequency (MHz)] [-x desired frequency offset (Hz)] ";
-  char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n";
+  char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
 
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -297,6 +328,7 @@ double   *foff;
   *mode  = 0;                /* default value */
   *chan  = 1;
   *ascii = 0;
+  *detect = 0;
   *foff  = 0;
   *fsamp = 0;
 
@@ -332,6 +364,11 @@ double   *foff;
 	
       case 'a':
 	*ascii = 1;
+	arg_count += 1;
+	break;
+
+      case 'd':
+	*detect = 1;
 	arg_count += 1;
 	break;
 	
