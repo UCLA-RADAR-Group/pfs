@@ -8,6 +8,7 @@
 *  	pfs_downsample -m mode -d downsampling factor 
 *                      [-f scale fudge factor]
 *                      [-b output signed bytes (default is floats)]
+*                      [-a process all data files (default to 0)
 *                      [-I dcoffi] [-Q dcoffq] 
 *                      [-c channel] 
 *                      [-s number of complex samples to skip] 
@@ -26,6 +27,9 @@
 
 /* 
    $Log$
+   Revision 3.5  2003/10/30 23:18:40  cvs
+   Added large file support for output file.
+
    Revision 3.4  2003/05/30 20:52:59  cvs
    Fixed bug in summation with -m 32: j index should increment by 1, not 8.
 
@@ -98,11 +102,17 @@ int	fdinput;		/* file descriptor for input file */
 int	fdoutput;		/* file descriptor to output file */
 
 char	command_line[200];	/* command line assembled by processargs */
+char	header[40];		/* data file name header */
+int	ext;			/* data file extension */
+int	open_flags;	/* flags required for open() call */
+struct  stat filestat;	/* input file status structure */
 int	verbose = 0;
 int	floats  = 1;    /* default output format is floating point */
+int	allfiles = 0;    /* data file to be processed */
 int	downsample;	/* factor by which to downsample */
 int     nsamples; 	/* # of complex samples in each buffer */
 float	smpwd;		/* # of single pol complex samples in a 4 byte word */
+float bytestoskip=0.0;	/* number of bytes to skip */
 
 int	mode;		/* data acquisition mode */
 int     chan;		/* channel to process (1 or 2) for dual pol data */
@@ -129,21 +139,17 @@ void *proc_buf(void *pdata);
 void *iq_downsample (void *pdata);
 
 void processargs();
-void open_file();
 void copy_cmd_line();
 
 
 int main(int argc, char *argv[])
 {
-  struct stat filestat;	/* input file status structure */
   unsigned char *buffer1, *buffer2;		/* buffer for packed data */
   char *channel1,*channel2;	/* buffer for unpacked data */
   float maxunpack;	/* maximum unpacked value from libunpack */
   float maxvalue;	/* maximum achievable value by downsampling */
   float fudge;		/* scale fudge factor */
-  int open_flags;	/* flags required for open() call */
   int samplestoskip;	/* number of complex samples to skip */
-  int bytestoskip=0;	/* number of bytes to skip */
   int i;
 
   char   *outfile;	/* output file name */
@@ -191,34 +197,39 @@ int main(int argc, char *argv[])
       exit(1);
       } 
   
-  /* test size compatibility */ 
+  /* 03/05/04 SWJ
+  /* test size compatibility  
   if (filestat.st_size % 4 != 0)
     fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", 
 	    filestat.st_size);
   if (filestat.st_size % downsample != 0)
     fprintf(stderr,"Warning: file size %d not a multiple of dwnsmplng factor\n",
 	    filestat.st_size);
+  */
 
   /* skip samples if needed */
   if (samplestoskip != 0)
   {
-    bytestoskip = 4 * samplestoskip / smpwd;
-    fprintf(stderr, "Skipping %d complex samples, equivalent to %d bytes\n", 
+    /* 03/05/04 SWJ: bytes-to-skip can have half byte in mode 1 (2c2b) */
+    bytestoskip = 4.0 * samplestoskip / smpwd;
+    fprintf(stderr, "Skipping %d complex samples, equivalent to %f bytes\n", 
 	    samplestoskip, bytestoskip);
     /* skip desired amount of bytes */
-    if (bytestoskip != lseek(fdinput, bytestoskip, SEEK_SET))
+    if ((int) bytestoskip != lseek(fdinput, (int) bytestoskip, SEEK_SET))
       {
         perror("lseek");
         fprintf(stderr, "Unable to skip %d bytes\n",bytestoskip);
         exit(1);
       }
-    /* test new size compatibility */ 
-    if ((filestat.st_size - bytestoskip) % 4 != 0)
+    /* 03/05/04 SWJ
+    /* test new size compatibility 
+    if ((filestat.st_size - (int) bytestoskip) % 4 != 0)
       fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of 4\n",
 	      filestat.st_size,bytestoskip);
-    if ((filestat.st_size - bytestoskip) % downsample != 0)
+    if ((filestat.st_size - (int) bytestoskip) % downsample != 0)
       fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of dwnsmplng factor\n", 
 	      filestat.st_size,bytestoskip);
+    */
   }
 
   /* open output file, stdout is default */
@@ -375,11 +386,34 @@ int main(int argc, char *argv[])
 
 void *read_buf (void *rdata) {
     struct jdata *rbuf = (struct jdata *)rdata;
+    int datasz;
+    char *infile;
 
     /* read one buffer */
-    if ((rbuf->bytesread = read (fdinput, rbuf->bfrthr1, bufsize)) == -1) {
+    if        ((rbuf->bytesread = read (fdinput, rbuf->bfrthr1, bufsize)) == -1) {
 	perror ("read");
 	return;
+    /* 03/05/04 SWJ - need more data from next data file? */
+    } else if (rbuf->bytesread != bufsize && allfiles == 1) {
+	sprintf (infile, "%s.%3.3d", &header[0], ++ext);
+
+	printf ("reading filename %s\n", infile);
+
+	/* valid data file? */
+	if ((fdinput = open(infile, open_flags, O_RDONLY)) < 0 ||
+		fstat (fdinput, &filestat) < 0)
+	{
+	    perror (infile);
+	    return;
+	}
+
+	/* make up the data buffer */
+    	if ((datasz = read (fdinput, rbuf->bfrthr1 + rbuf->bytesread, bufsize - rbuf->bytesread )) == -1) {
+	    perror ("read");
+	    return;
+	} else {
+	    rbuf->bytesread = datasz + rbuf->bytesread;
+	} 
     }
 }
 
@@ -453,7 +487,22 @@ void *iq_downsample (void *pdata)
   else
     x = (signed char *) malloc(nbytes);
 
-  for (bcnt = nsamples / downsample; bcnt > 0; bcnt--)
+  bcnt = nsamples / downsample;
+
+  /* 03/05/04 SWJ - need to skip 1st sample ?  */
+  if (bytestoskip - (int) bytestoskip != 0) {
+    printf ("***** Skipping one extra sample ***** \n");
+    bcnt --;
+
+    /* skip I & Q */
+    *inbuf++;
+    *inbuf++;
+
+    /* no more byte skipping */
+    bytestoskip = 0.0;
+  }
+
+  for (; bcnt > 0; bcnt--)
   {
     if (mode == 32) {
 	for (j = 0, isf = 0.0, qsf = 0.0; j < downsample; j += 1, k += 8) {
@@ -501,7 +550,7 @@ void *iq_downsample (void *pdata)
     }
   }
 
-  if (l != nbytes) fprintf(stderr,"oops\n");
+  /* 03/05/04 SWJ  if (l != nbytes) fprintf(stderr,"oops\n"); */
   
   /* print diagnostics */
   if (verbose && !floats) 
@@ -509,14 +558,15 @@ void *iq_downsample (void *pdata)
 	    nbytes,nclipped); 
 
   /* write it out */
+  /* SWJ - replaced all nbytes with l */
   if (floats)
     {
-      if (write(fdoutput, y, 4 * nbytes) != 4 * nbytes) perror ("Write floats");
+      if (write(fdoutput, y, 4 * l) != 4 * l) perror ("Write floats");
       free(y);
     }
   else
     {
-      if (write(fdoutput, x, nbytes) != nbytes) perror ("Write bytes");
+      if (write(fdoutput, x, l) != l) perror ("Write bytes");
       free(x);
     }
 
@@ -551,8 +601,8 @@ int 	*samplestoskip;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:d:c:s:I:Q:bf:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
+  char *myoptions = "m:o:d:c:s:I:Q:bf:a"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-a all data files] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -570,6 +620,7 @@ int 	*samplestoskip;
   *fudge = 1;
   *samplestoskip = 0;
   floats = 1;
+  allfiles = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -616,6 +667,11 @@ int 	*samplestoskip;
       arg_count += 1;
       break;
 
+    case 'a':
+      allfiles = 1;
+      arg_count += 1;
+      break;
+
     case 's':
       sscanf(optarg,"%d",samplestoskip);
       arg_count += 2;		/* two command line arguments */
@@ -629,6 +685,17 @@ int 	*samplestoskip;
 
   if (arg_count < argc)		 /* 1st non-optioned param is infile */
     *infile = argv[arg_count];
+
+  /* SWJ 03/05/04 */
+  if (allfiles == 1) {
+	/* get data file information */
+	/* get extension part of 'filename.ext' */
+	strcpy (header, strrchr (*infile, '.'));
+	ext = atoi (&header[1]);
+
+	/* get 'name' part */
+	strncpy (header, *infile, strlen(*infile) - strlen(header));
+  }
 
   /* must specify a valid mode and downsampling factor */
   if (*mode == 0 || *downsample < 1) goto errout;
