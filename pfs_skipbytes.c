@@ -25,13 +25,16 @@
 
 /* 
    $Log$
+   Revision 1.1  2002/04/27 06:26:37  margot
+   Initial revision
+
 */
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <asm/fcntl.h>
 
 /* revision control variable */
 static char const rcsid[] = 

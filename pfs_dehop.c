@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 1.5  2002/04/27 06:10:57  margot
+   Added -i option.
+
    Revision 1.4  2001/07/07 15:35:24  margot
    Added -b option for binary output.
    Fixed rounding of integer quantities.
@@ -49,7 +52,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+#include <asm/fcntl.h>
 #include "unpack.h"
 #include <fftw.h>
 
