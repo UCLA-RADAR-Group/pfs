@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 2.0  2002/05/13 00:01:32  cvs
+   Added -a option for statistics on entire input file.
+
    Revision 1.7  2002/05/12 20:38:27  cvs
    Added mode for floating point values.
 
@@ -84,6 +87,7 @@ int main(int argc, char *argv[])
   double li,lq,lii,lqq,liq;/* accumulators for statistics */
   int nsamples;		/* # of complex samples in each buffer */
   int ntotal;		/* total number of samples used in computing statistics */
+  int bytesread;	/* number of bytes read from input file */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
   int parse_all;
@@ -110,15 +114,6 @@ int main(int argc, char *argv[])
       perror("open input file");
       exit(1);
     }
-
-  /* get file status and adjust buffer size if needed */
-  if (fstat (fdinput, &filestat) < 0)
-    {
-      perror("input file status");
-      exit(1);
-    }
-  if (filestat.st_size < bufsize) 
-    bufsize = filestat.st_size;
 
   switch (mode)
     {
@@ -160,10 +155,15 @@ int main(int argc, char *argv[])
   /* read buffers */
   while (1)
     {
-      if (bufsize != read(fdinput, buffer, bufsize))
+
+      bytesread = read(fdinput, buffer, bufsize);
+      /* check for end of file */
+      if (bytesread == 0) break;
+      /* check for small buffers */
+      if (bytesread != bufsize) 
 	{
-	  fprintf(stderr,"Read error or EOF after %d samples\n",ntotal);
-	  break;
+	  bufsize = bytesread;
+	  nsamples = (int) rint(bufsize * smpwd / 4.0);
 	}
 
       switch (mode)
