@@ -20,6 +20,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2000/10/30 04:46:22  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -51,14 +54,14 @@ void iq_hist_8b(float *inbuf, int nsamples, int levels);
 int main(int argc, char *argv[])
 {
   int mode;
-  signed char *buffer;
-  float *buf;
-  float *rcp,*lcp;
-  int bufsize = 1024 * 1024;
-  int parseall;
+  int bufsize = 1048576;/* size of read buffer, default 1 MB */
+  char *buffer;		/* buffer for packed data */
+  float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
+  int parseall;
   int i;
 
   /* get the command line arguments and open the files */
@@ -91,61 +94,51 @@ int main(int argc, char *argv[])
     }
 
   /* allocate storage */
-  if (mode > 4)
-    {
-      rcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-      lcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-    }
-  else
-    buf = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-
-  buffer = (signed char *) malloc(bufsize);
+  nsamples = bufsize * smpwd / 4;
+  rcp = (float *) malloc(2 * nsamples * sizeof(float));
+  lcp = (float *) malloc(2 * nsamples * sizeof(float));
+  buffer = (char *) malloc(bufsize);
   if (buffer == NULL) 
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
     }
 
-  if (parseall)
-    {
-      fprintf(stderr,"-a option not implemented yet\n"); 
-      exit(1);
-    }
-
+  /* read first buffer */
   if (bufsize != read(fdinput, buffer, bufsize))
     fprintf(stderr,"Read error\n");
   
   switch (mode)
     { 
     case -1:
-      unpack_gsb(buffer, buf, bufsize);  
-      iq_hist(buf, bufsize * 2, levels); 
+      unpack_gsb(buffer, rcp, bufsize);  
+      iq_hist(rcp, nsamples, levels); 
       break;
     case 1:
-      unpack_pfs_2c2b(buffer, buf, bufsize);
-      iq_hist(buf, bufsize * 2, levels);
+      unpack_pfs_2c2b(buffer, rcp, bufsize);
+      iq_hist(rcp, nsamples, levels);
       break;
     case 2: 
-      unpack_pfs_2c4b(buffer, buf, bufsize);
-      iq_hist(buf, bufsize, levels);
+      unpack_pfs_2c4b(buffer, rcp, bufsize);
+      iq_hist(rcp, nsamples, levels);
       break;
     case 3: 
-      unpack_pfs_2c8b(buffer, buf, bufsize);
-      iq_hist_8b(buf, bufsize / 2, levels);
+      unpack_pfs_2c8b(buffer, rcp, bufsize);
+      iq_hist_8b(rcp, nsamples, levels);
       break;
     case 5:
       unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP hist\n");
-      iq_hist(rcp, bufsize, levels);
+      iq_hist(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP hist\n");
-      iq_hist(lcp, bufsize, levels);
+      iq_hist(lcp, nsamples, levels);
       break;
     case 6:
       unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP hist\n");
-      iq_hist(rcp, bufsize / 2, levels);
+      iq_hist(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP hist\n");
-      iq_hist(lcp, bufsize / 2, levels);
+      iq_hist(lcp, nsamples, levels);
       break;
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
     }
@@ -293,6 +286,12 @@ int     *parseall;
   /* must specify a valid mode */
   if (*mode == 0) goto errout;
   
+  /* code still in development */
+  if (*parseall)
+    {
+      fprintf(stderr,"-a option not implemented yet\n"); 
+      exit(1);
+    }
   return;
 
   /* here if illegal option or argument */

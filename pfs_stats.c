@@ -21,6 +21,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2000/10/30 04:45:22  margot
+   Initial revision
+
 */
 
 #include <math.h>
@@ -51,13 +54,13 @@ void iq_stats(float *inbuf, int nsamples);
 int main(int argc, char *argv[])
 {
   int mode;
-  char *buffer;
-  float *buf;
-  float *rcp,*lcp;
-  int bufsize = 1024 * 1024;
-  int parseall;
+  int bufsize = 1048576;/* size of read buffer, default 1 MB */
+  char *buffer;		/* buffer for packed data */
+  float *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  int nsamples;		/* # of complex samples in each buffer */
   int open_flags;	/* flags required for open() call */
+  int parseall;
   int i;
 
   /* get the command line arguments and open the files */
@@ -90,13 +93,9 @@ int main(int argc, char *argv[])
     }
 
   /* allocate storage */
-  if (mode < 5)
-    buf = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-  else
-    {
-      rcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-      lcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
-    }
+  nsamples = bufsize * smpwd / 4;
+  rcp = (float *) malloc(2 * nsamples * sizeof(float));
+  lcp = (float *) malloc(2 * nsamples * sizeof(float));
   buffer = (char *) malloc(bufsize);
   if (buffer == NULL)
     {
@@ -104,46 +103,41 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
-  if (parseall)
-    {
-      fprintf(stderr,"-a option not implemented yet\n"); 
-      exit(1);
-    }
-
+  /* read first buffer */
   if (bufsize != read(fdinput, buffer, bufsize))
     fprintf(stderr,"Read error\n");
   
   switch (mode)
     { 
     case -1:
-      unpack_gsb(buffer, buf, bufsize);
-      iq_stats(buf, bufsize * 2);
+      unpack_gsb(buffer, rcp, bufsize);
+      iq_stats(rcp, nsamples);
       break;
     case 1:
-      unpack_pfs_2c2b(buffer, buf, bufsize);
-      iq_stats(buf, bufsize * 2);
+      unpack_pfs_2c2b(buffer, rcp, bufsize);
+      iq_stats(rcp, nsamples);
       break;
     case 2: 
-      unpack_pfs_2c4b(buffer, buf, bufsize);
-      iq_stats(buf, bufsize);
+      unpack_pfs_2c4b(buffer, rcp, bufsize);
+      iq_stats(rcp, nsamples);
       break;
     case 3: 
-      unpack_pfs_2c8b(buffer, buf, bufsize);
-      iq_stats(buf, bufsize / 2);
+      unpack_pfs_2c8b(buffer, rcp, bufsize);
+      iq_stats(rcp, nsamples);
       break;
     case 5:
       unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, bufsize);
+      iq_stats(rcp, nsamples);
       fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, bufsize);
+      iq_stats(lcp, nsamples);
       break;
     case 6:
       unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
       fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, bufsize / 2);
+      iq_stats(rcp, nsamples);
       fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, bufsize / 2);
+      iq_stats(lcp, nsamples);
       break;
 
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
@@ -263,6 +257,13 @@ int     *parseall;
   /* must specify a valid mode */
   if (*mode == 0) goto errout;
   
+  /* code still in development */
+  if (*parseall)
+    {
+      fprintf(stderr,"-a option not implemented yet\n"); 
+      exit(1);
+    }
+
   return;
 
   /* here if illegal option or argument */
