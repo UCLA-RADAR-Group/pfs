@@ -15,6 +15,9 @@
 
 /* 
    $Log$
+   Revision 1.1  2002/05/12 23:16:24  cvs
+   This program resets the PFS hardware.
+
 */
 
 #include <math.h>
@@ -45,9 +48,11 @@ int main(int argc, char **argv)
     
     /* turn off trigger */
     edt_reg_write(edt_p, PCD_FUNCT, off);
+    fprintf(stderr,"Registers cleared\n");
 
     /* close device */
     edt_close(edt_p);
+    fprintf(stderr,"Device closed\n");
 
     exit(0) ;
 }
