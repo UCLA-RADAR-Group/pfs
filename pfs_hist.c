@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 1.4  2001/07/10 00:24:07  margot
+   Added unpacking of signed bytes.
+
    Revision 1.3  2001/07/10 00:18:39  margot
    Added -e option for parsing at end of file.
 
@@ -38,6 +41,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "unpack.h"
 
 /* revision control variable */
@@ -61,7 +68,8 @@ void iq_hist_8b(float *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
 {
-  int mode;
+  struct stat filestat;	/* input file status structure */
+  int mode;		/* data acquisition mode */
   int bufsize = 1048576;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
@@ -93,6 +101,17 @@ int main(int argc, char *argv[])
       perror("open input file");
       exit(1);
     }
+
+  /* get file status */
+  if (fstat (fdinput, &filestat) < 0)
+    {
+      perror("input file status");
+      exit(1);
+    }
+  
+  /* adjust buffer size if needed */
+  if (filestat.st_size < bufsize)
+    bufsize = filestat.st_size;
 
   switch (mode)
     {
@@ -143,7 +162,7 @@ int main(int argc, char *argv[])
       break;
     case 3: 
       unpack_pfs_2c8b(buffer, rcp, bufsize);
-      iq_hist_8b(rcp, nsamples, levels);
+      iq_hist(rcp, nsamples, levels);
       break;
     case 5:
       unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
