@@ -38,6 +38,9 @@
 
 /* 
    $Log$
+   Revision 1.4  2001/07/04 00:14:57  margot
+   Added mode 8 for unpacking signed bytes.
+
    Revision 1.3  2000/10/30 05:38:44  margot
    Added variable nsamples.
 
@@ -83,7 +86,7 @@ int main(int argc, char *argv[])
   int bufsize;		/* size of read buffer */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
-  int smpwd;		/* # of single pol complex samples in a 4 byte word */
+  float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
 
@@ -129,13 +132,14 @@ int main(int argc, char *argv[])
 
   switch (mode)
     {
-    case -1: smpwd = 8; break;  
-    case  1: smpwd = 8; break;
-    case  2: smpwd = 4; break;
-    case  3: smpwd = 2; break; 
-    case  5: smpwd = 4; break;
-    case  6: smpwd = 2; break;
-    case  8: smpwd = 2; break; 
+    case  -1: smpwd = 8; break;  
+    case   1: smpwd = 8; break;
+    case   2: smpwd = 4; break;
+    case   3: smpwd = 2; break; 
+    case   5: smpwd = 4; break;
+    case   6: smpwd = 2; break;
+    case   8: smpwd = 2; break; 
+    case  32: smpwd = 0.5; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
@@ -214,6 +218,9 @@ int main(int argc, char *argv[])
 	  break;
      	case 8: 
 	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  break;
+     	case 32: 
+	  memcpy(rcp,buffer,bufsize);
 	  break;
 	default: 
 	  fprintf(stderr,"Mode not implemented yet\n"); 
