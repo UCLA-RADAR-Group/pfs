@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.11  2002/06/05 16:55:10  cvs
+   Corrected one error message.
+
    Revision 1.10  2002/05/12 13:36:02  cvs
    Cosmetic changes.
 
@@ -96,6 +99,7 @@ void open_file();
 void copy_cmd_line();
 void vector_power(float *data, int len);
 void swap_freq(float *data, int len);
+void swap_iandq(float *data, int len);
 void zerofill(float *data, int len);
 int  no_comma_in_string();	
 
@@ -132,6 +136,7 @@ int main(int argc, char *argv[])
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
   int swap = 1;		/* swap frequencies at output of fft routine */
+  int invert = 0;	/* swap i and q before fft routine */
 
   fftw_plan p;
   int i,j,k,l,n;
@@ -264,6 +269,7 @@ int main(int argc, char *argv[])
 	memcpy(fftbuf,rcp,2*fftlen*sizeof(float));
 
       /* transform, swap, and compute power */
+      if (invert) swap_iandq(fftbuf,fftlen); 
       fftw_one(p, (fftw_complex *)fftbuf, (fftw_complex *)rcp);
       if (swap) swap_freq(rcp,fftlen); 
       vector_power(rcp,fftlen);
@@ -586,6 +592,28 @@ void swap_freq(float *data, int len)
   float temp;
 
   for (i=0, j=len; i<len; i++, j++)
+    {
+      temp    = data[i];
+      data[i] = data[j];
+      data[j] = temp;
+    }
+
+  return;
+}
+
+/******************************************************************************/
+/*	swap_iandq							      */
+/******************************************************************************/
+void swap_iandq(float *data, int len)
+{
+  /* swaps the i and q components of each complex word to reverse the "phase"
+     direction, the data array is len complex samples long or 2*len samples long
+  */
+
+  int i,j;
+  float temp;
+
+  for (i=0, j=1; i < 2*len; i+=2, j+=2)
     {
       temp    = data[i];
       data[i] = data[j];
