@@ -19,6 +19,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2002/04/27 20:19:17  margot
+   Removed obsolete routines specific to Golevka Sampling Box.
+
    Revision 1.2  2002/04/27 06:44:07  margot
    Updated device filename.
 
@@ -57,7 +60,7 @@ int main(int argc, char *argv[])
   int mode;
   int bufsize = 1048576; /* 1048576 size of read buffer, default 1 MB */
   unsigned char *buffer;		/* buffer for packed data */
-  float *rcp,*lcp;	/* buffer for unpacked data */
+  char *rcp,*lcp;	/* buffer for unpacked data */
   int smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
@@ -89,9 +92,9 @@ int main(int argc, char *argv[])
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer = NULL;
-  rcp = (float *) malloc(2 * nsamples * sizeof(float));
-  lcp = (float *) malloc(2 * nsamples * sizeof(float));
-  if (lcp == NULL)
+  rcp = (char *) malloc(2 * nsamples * sizeof(char));
+  lcp = (char *) malloc(2 * nsamples * sizeof(char));
+  if (rcp == NULL || lcp == NULL)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
@@ -142,6 +145,7 @@ int main(int argc, char *argv[])
 	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
 	  else
 	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+
 	  break;
 	case 2: 
 	  unpack_pfs_2c4b(buffer, rcp, bufsize);
@@ -150,6 +154,7 @@ int main(int argc, char *argv[])
 	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
 	  else
 	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+
 	  break;
 	case 3: 
 	  unpack_pfs_2c8b(buffer, rcp, bufsize); 
@@ -158,9 +163,12 @@ int main(int argc, char *argv[])
 	      fprintf(stdout,"% 4.0f % 4.0f\n",rcp[i],rcp[i+1]);
 	  else
 	    fprintf(stdout,"% 4.0f % 4.0f\n",rcp[0],rcp[1]);
+
 	  break;
 	case 5:
-	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize); 
+	  unpack_pfs_4c2b_rcp (buffer, rcp, bufsize); 
+	  unpack_pfs_4c2b_lcp (buffer, lcp, bufsize); 
+
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
 	      fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
@@ -168,9 +176,12 @@ int main(int argc, char *argv[])
 	  else
 	    fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
 		    rcp[0],rcp[1],lcp[0],lcp[1]);
+
 	  break;
 	case 6:
-	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+	  unpack_pfs_4c4b_rcp (buffer, rcp, bufsize);
+	  unpack_pfs_4c4b_lcp (buffer, lcp, bufsize);
+
 	  if (printall)
 	    for (i = 0; i < 2*nsamples; i+=2) 
 	      fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
@@ -178,6 +189,7 @@ int main(int argc, char *argv[])
 	  else
 	    fprintf(stdout,"% 4.0f % 4.0f % 4.0f % 4.0f\n",
 		    rcp[0],rcp[1],lcp[0],lcp[1]);
+
 	  break;
 	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
 	}
