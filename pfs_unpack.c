@@ -9,6 +9,7 @@
 *  	pfs_unpack -m mode 
 *                  [-a output ascii to stdout]
 *                  [-d (detect and output magnitude)] 
+*                  [-p (detect and output power)] 
 *                  [-c channel] 
 *                  [-o outfile] [infile]
 *  for phase rotation, also specify
@@ -28,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 2.7  2002/07/25 22:38:29  cvs
+   Added mode 16 for 16-bit signed integers.
+
    Revision 2.6  2002/06/05 22:22:55  cvs
    Changed computation of outbufsize with -d option.
 
@@ -111,11 +115,12 @@ int main(int argc, char *argv[])
   int nsamples;		/* # of complex samples in each buffer */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int ascii;		/* text output */
-  int detect;		/* magnitude output */
+  int mdetect;		/* magnitude output */
+  int pdetect;		/* power output */
   int i,j;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii,&detect,&fsamp,&foff);
+  processargs(argc,argv,&infile,&outfile,&mode,&chan,&ascii,&mdetect,&pdetect,&fsamp,&foff);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -230,17 +235,25 @@ int main(int argc, char *argv[])
 	}
 
       /* optionally compute magnitude */
-      if (detect)
+      if (mdetect && !pdetect)
 	{
 	  outbufsize = nsamples * sizeof(float);
 	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
 	    rcp[i] = sqrt(rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1]);
 	}
+
+      /* optionally compute power */
+      if (pdetect && !mdetect)
+	{
+	  outbufsize = nsamples * sizeof(float);
+	  for (i = 0, j = 0; i < nsamples; i++, j+=2)
+	    rcp[i] = rcp[j]*rcp[j]+rcp[j+1]*rcp[j+1];
+	}
       
       /* write data to output file */
       if (ascii)
 	{
-	  if (detect)
+	  if (mdetect || pdetect)
 	    for (i = 0; i < nsamples; i++)
 	      fprintf(stdout,"% .3f\n",rcp[i]);
 	  else
@@ -300,7 +313,7 @@ void apply_linear_phase(float *data, double freq, double time, double timeint, i
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,chan,ascii,detect,fsamp,foff)
+void	processargs(argc,argv,infile,outfile,mode,chan,ascii,mdetect,pdetect,fsamp,foff)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -308,7 +321,8 @@ char	**outfile;		 /* output file name */
 int     *mode;
 int     *chan;
 int     *ascii;
-int     *detect;
+int     *mdetect;
+int     *pdetect;
 double   *fsamp;
 double   *foff;
 {
@@ -323,8 +337,8 @@ double   *foff;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:c:o:adf:x:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-o outfile] [infile] ";
+  char *myoptions = "m:c:o:adpf:x:"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-p (detect and output power)] [-o outfile] [infile] ";
   char *USAGE2="For phase rotation, also specify [-f sampling frequency (MHz)] [-x desired frequency offset (Hz)] ";
   char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
 
@@ -339,7 +353,8 @@ double   *foff;
   *mode  = 0;                /* default value */
   *chan  = 1;
   *ascii = 0;
-  *detect = 0;
+  *mdetect = 0;
+  *pdetect = 0;
   *foff  = 0;
   *fsamp = 0;
 
@@ -379,7 +394,12 @@ double   *foff;
 	break;
 
       case 'd':
-	*detect = 1;
+	*mdetect = 1;
+	arg_count += 1;
+	break;
+	
+      case 'p':
+	*pdetect = 1;
 	arg_count += 1;
 	break;
 	
