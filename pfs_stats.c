@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 1.7  2002/05/12 20:38:27  cvs
+   Added mode for floating point values.
+
    Revision 1.6  2002/05/03 18:08:11  cvs
    Added dBm scale.
 
@@ -68,23 +71,24 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void stats(float *inbuf, int nsamples);
-void iq_stats(float *inbuf, int nsamples, int levels);
+void sum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
 
 int main(int argc, char *argv[])
 {
   struct stat filestat;	/* input file status structure */
-  int bufsize = 1048576;/* size of read buffer, default 1 MB */
+  int bufsize = 1000000;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
   float *rcp,*lcp;	/* buffer for unpacked data */
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
+  double ri,rq,rii,rqq,riq;/* accumulators for statistics */
+  double li,lq,lii,lqq,liq;/* accumulators for statistics */
   int nsamples;		/* # of complex samples in each buffer */
+  int ntotal;		/* total number of samples used in computing statistics */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
   int parse_all;
   int parse_end;
   int mode;
-  int i;
 
   /* get the command line arguments and open the files */
   processargs(argc,argv,&infile,&outfile,&mode,&parse_all,&parse_end);
@@ -131,7 +135,7 @@ int main(int argc, char *argv[])
     }
 
   /* allocate storage */
-  nsamples = bufsize * smpwd / 4;
+  nsamples = (int) rint(bufsize * smpwd / 4.0);
   buffer = (char *) malloc(bufsize);
   rcp = (float *) malloc(2 * nsamples * sizeof(float));
   lcp = (float *) malloc(2 * nsamples * sizeof(float));
@@ -141,161 +145,183 @@ int main(int argc, char *argv[])
       exit(1);
     }
 
+  /* initialize counters */
+  ntotal = 0;
+  ri  = li  = 0; 
+  rq  = lq  = 0; 
+  rii = lii = 0;
+  rqq = lqq = 0;
+  riq = liq = 0;
+
+  /* go to end of file if requested */
   if (parse_end)
     lseek(fdinput, -bufsize, SEEK_END);
 
-  /* read first buffer */
-  if (bufsize != read(fdinput, buffer, bufsize))
+  /* read buffers */
+  while (1)
     {
-      fprintf(stderr,"Read error\n");
-      exit(1);
+      if (bufsize != read(fdinput, buffer, bufsize))
+	{
+	  fprintf(stderr,"Read error or EOF after %d samples\n",ntotal);
+	  break;
+	}
+
+      switch (mode)
+	{ 
+	case 1:
+	  unpack_pfs_2c2b(buffer, rcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  break;
+	case 2: 
+	  unpack_pfs_2c4b(buffer, rcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  break;
+	case 3: 
+	  unpack_pfs_2c8b(buffer, rcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  break;
+	case 5:
+	  unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
+	  break;
+	case 6:
+	  unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
+	  break;
+	case 8: 
+	  unpack_pfs_signedbytes(buffer, rcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  break;
+	case 32: 
+	  memcpy(rcp,buffer,bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  break;
+	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
+	}
+      
+      ntotal += nsamples;
+      if (!parse_all) break;
     }
 
-  switch (mode)
-    { 
-    case 1:
-      unpack_pfs_2c2b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples, levels);
-      break;
-    case 2: 
-      unpack_pfs_2c4b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples, levels);
-      break;
-    case 3: 
-      unpack_pfs_2c8b(buffer, rcp, bufsize);
-      iq_stats(rcp, nsamples, levels);
-      break;
-    case 5:
-      unpack_pfs_4c2b(buffer, rcp, lcp, bufsize);
-      fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, nsamples, levels);
-      fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, nsamples, levels);
-      break;
-    case 6:
-      unpack_pfs_4c4b(buffer, rcp, lcp, bufsize);
-      fprintf(fpoutput,"RCP stats\n");
-      iq_stats(rcp, nsamples, levels);
-      fprintf(fpoutput,"LCP stats\n");
-      iq_stats(lcp, nsamples, levels);
-      break;
-    case 8: 
-      unpack_pfs_signedbytes(buffer, rcp, bufsize);
-      stats(rcp, nsamples);
-      break;
-    case 32: 
-      memcpy(rcp,buffer,bufsize);
-      stats(rcp, nsamples);
-      break;
+  /* compute mean and standard deviation (RCP) */
+  ri = ri / ntotal;
+  rq = rq / ntotal;
+  riq = riq / ntotal;
+  rii = rii / ntotal;
+  rqq = rqq / ntotal;
+  rii = sqrt(rii - ri*ri);
+  rqq = sqrt(rqq - rq*rq);
 
-    default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
+  /* compute mean and standard deviation (LCP) */
+  li = li / ntotal;
+  lq = lq / ntotal;
+  liq = liq / ntotal;
+  lii = lii / ntotal;
+  lqq = lqq / ntotal;
+  lii = sqrt(lii - li*li);
+  lqq = sqrt(lqq - lq*lq);
+
+  /* print results */
+  if (mode > 8) 
+    fprintf(fpoutput,"Statistics on %d samples:\n",ntotal);
+  else
+    fprintf(fpoutput,"In digitizer counts (x2):\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+
+  if (mode == 5 || mode == 6)
+    {
+      fprintf(fpoutput,"RCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",ri,rii);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",rq,rqq);
+      fprintf(fpoutput,"% 10.4f ",fabs(riq - ri*rq)/rii/rqq);
+      fprintf(fpoutput,"\n"); 
+      
+      fprintf(fpoutput,"LCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",li,lii);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",lq,lqq);
+      fprintf(fpoutput,"% 10.4f ",fabs(liq - li*lq)/lii/lqq);
+      fprintf(fpoutput,"\n"); 
     }
-  
+  else
+    {
+      fprintf(fpoutput,"% 10.4f % 10.4f ",ri,rii);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",rq,rqq);
+      fprintf(fpoutput,"% 10.4f ",fabs(riq - ri*rq)/rii/rqq);
+      fprintf(fpoutput,"\n"); 
+    }
+
+  /* exit here for bytes and floats */
+  if (mode >= 8) return 0;
+
+  /* convert to volts */
+  /* AD range is 1 Vpp */
+  fprintf(fpoutput,"\nIn Volts:\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+
+  if (mode == 5 || mode == 6)
+    {
+      fprintf(fpoutput,"RCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",ri/levels/2.0,rii/levels/2.0);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",rq/levels/2.0,rqq/levels/2.0);
+      fprintf(fpoutput,"\n"); 
+
+      fprintf(fpoutput,"LCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",li/levels/2.0,lii/levels/2.0);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",lq/levels/2.0,lqq/levels/2.0);
+      fprintf(fpoutput,"\n"); 
+    }
+  else
+    {
+      fprintf(fpoutput,"% 10.4f % 10.4f ",ri/levels/2.0,rii/levels/2.0);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",rq/levels/2.0,rqq/levels/2.0);
+      fprintf(fpoutput,"\n"); 
+    }
+
+  /* convert to dBm */
+  /* AD range is 1 Vpp */
+  fprintf(fpoutput,"\nIn dBm:\n");
+  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
+
+  if (mode == 5 || mode == 6)
+    {
+      fprintf(fpoutput,"RCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(rii/levels/2.0)+13);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(rqq/levels/2.0)+13);
+      fprintf(fpoutput,"\n"); 
+
+      fprintf(fpoutput,"LCP stats\n");
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(lii/levels/2.0)+13);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(lqq/levels/2.0)+13);
+      fprintf(fpoutput,"\n");
+    } 
+  else
+    {
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(rii/levels/2.0)+13);
+      fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(rqq/levels/2.0)+13);
+      fprintf(fpoutput,"\n"); 
+    }
+ 
   return 0;
 }
 
 /******************************************************************************/
-/*	iq_stats							      */
+/*	sum								      */
 /******************************************************************************/
-void iq_stats(float *inbuf, int nsamples, int levels)
+void sum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
 {
-  double i=0;
-  double q=0;
-  double ii=0;
-  double qq=0;
-  double iq=0;
-
   int k;
 
   /* sum Is and Qs */
   for (k = 0; k < 2*nsamples; k += 2)
     {
-      i  += inbuf[k];
-      q  += inbuf[k+1];
-      iq += inbuf[k] * inbuf[k+1];
-      ii += inbuf[k] * inbuf[k];
-      qq += inbuf[k+1] * inbuf[k+1];
+      *i  += inbuf[k];
+      *q  += inbuf[k+1];
+      *iq += inbuf[k] * inbuf[k+1];
+      *ii += inbuf[k] * inbuf[k];
+      *qq += inbuf[k+1] * inbuf[k+1];
     }
-
-  /* compute mean and standard deviation */
-  i = i / nsamples;
-  q = q / nsamples;
-  
-  iq = iq / nsamples;
-
-  ii = ii / nsamples;
-  qq = qq / nsamples;
-
-  ii = sqrt(ii - i*i);
-  qq = sqrt(qq - q*q);
-
-  fprintf(fpoutput,"In digitizer counts (x2):\n");
-  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
-  fprintf(fpoutput,"% 10.4f % 10.4f ",i,ii);
-  fprintf(fpoutput,"% 10.4f % 10.4f ",q,qq);
-  fprintf(fpoutput,"% 10.4f ",fabs(iq - i*q)/ii/qq);
-  fprintf(fpoutput,"\n"); 
-
-  /* convert to volts */
-  /* AD range is 1 Vpp */
-  fprintf(fpoutput,"In Volts:\n");
-  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
-  fprintf(fpoutput,"% 10.4f % 10.4f ",i/levels/2.0,ii/levels/2.0);
-  fprintf(fpoutput,"% 10.4f % 10.4f ",q/levels/2.0,qq/levels/2.0);
-  fprintf(fpoutput,"\n"); 
-
-  /* convert to dBm */
-  /* AD range is 1 Vpp */
-  fprintf(fpoutput,"In dBm:\n");
-  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
-  fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(ii/levels/2.0)+13);
-  fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(qq/levels/2.0)+13);
-  fprintf(fpoutput,"\n"); 
-
-  return;
-}    
-
-/******************************************************************************/
-/*	stats								      */
-/******************************************************************************/
-void stats(float *inbuf, int nsamples)
-{
-  double i=0;
-  double q=0;
-  double ii=0;
-  double qq=0;
-  double iq=0;
-
-  int k;
-
-  /* sum Is and Qs */
-  for (k = 0; k < 2*nsamples; k += 2)
-    {
-      i  += inbuf[k];
-      q  += inbuf[k+1];
-      iq += inbuf[k] * inbuf[k+1];
-      ii += inbuf[k] * inbuf[k];
-      qq += inbuf[k+1] * inbuf[k+1];
-    }
-
-  /* compute mean and standard deviation */
-  i = i / nsamples;
-  q = q / nsamples;
-  
-  iq = iq / nsamples;
-
-  ii = ii / nsamples;
-  qq = qq / nsamples;
-
-  ii = sqrt(ii - i*i);
-  qq = sqrt(qq - q*q);
-
-  fprintf(fpoutput,"Statistics:\n");
-  fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
-  fprintf(fpoutput,"% 10.4f % 10.4f ",i,ii);
-  fprintf(fpoutput,"% 10.4f % 10.4f ",q,qq);
-  fprintf(fpoutput,"% 10.4f ",fabs(iq - i*q)/ii/qq);
-  fprintf(fpoutput,"\n"); 
 
   return;
 }    
@@ -375,13 +401,6 @@ int     *parse_end;
   /* must specify a valid mode */
   if (*mode == 0) goto errout;
   
-  /* code still in development */
-  if (*parse_all)
-    {
-      fprintf(stderr,"-a option not implemented yet\n"); 
-      exit(1);
-    }
-
   return;
 
   /* here if illegal option or argument */
