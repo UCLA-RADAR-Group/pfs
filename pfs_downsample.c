@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.7  2002/05/26 00:43:13  cvs
+   Added mode 32 for downsampling floats.
+
    Revision 1.6  2002/05/02 05:48:34  cvs
    Mode added to usage line
 
@@ -90,6 +93,7 @@ int main(int argc, char *argv[])
   float fudge;		/* scale fudge factor */
   float dcoffi,dcoffq;	/* dc offsets */
   int bufsize;		/* input buffer size */
+  int bytesread;	/* number of bytes read from input file */
   int downsample;	/* factor by which to downsample */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int open_flags;	/* flags required for open() call */
@@ -119,10 +123,15 @@ int main(int argc, char *argv[])
       perror("input file status");
       exit(1);
     }
+  if (filestat.st_size % 4 != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n",
+	    filestat.st_size);
+  if (filestat.st_size % downsample != 0)
+    fprintf(stderr,"Warning: file size %d is not a multiple of the downsampling factor\n",
+	    filestat.st_size);
 
   /* open output file, stdout default */
   open_file(outfile,&fpoutput);
-
 
   switch (mode)
     {
@@ -150,21 +159,11 @@ int main(int argc, char *argv[])
     }
 
   /* compute buffer size */
-  /* we need something of order a Megabyte, multiple of the downsampling factor */
-  /* and ideally consistent with the input file size */
-  bufsize = (int) rint(1000000/downsample) * downsample;
-
-  if (filestat.st_size % downsample != 0)
-    fprintf(stderr,"This may leave the last buffer truncated\n");
-  else
-    /* if the filesize is a multiple of the downsampling factor, */
-    /* we try to choose a buffer size that will fit nicely as well */
-    while (filestat.st_size % bufsize != 0 && bufsize % 4 != 0)
-      bufsize -= downsample;
-  fprintf(stderr,"Using %d buffers of size of %d\n", 
+  /* we need a multiple of the downsampling factor, or order 1 MB */
+  bufsize = 4 * (int) rint(1000000/downsample) * downsample;
+  fprintf(stderr,"Using %d buffers of size %d\n", 
 	  filestat.st_size / bufsize, bufsize);
   
-
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer = (char *) malloc(bufsize);
@@ -172,16 +171,24 @@ int main(int argc, char *argv[])
   lcp = (float *) malloc(2 * bufsize * smpwd / 4 * sizeof(float));
   if (!lcp) fprintf(stderr,"Malloc error\n");
 
+  if (nsamples % downsample != 0)
+    fprintf(stderr,"Warning: # samples per buffer %d, downsampling factor %d\n",
+	    nsamples,downsample);
+
+  /* infinite loop */
   while (1)
     {
       /* read one buffer */
-      if (bufsize != read(fdinput, buffer, bufsize))
+      bytesread = read(fdinput, buffer, bufsize);
+      /* check for end of file */
+      if (bytesread == 0) break;
+      /* handle small buffers */
+      if (bytesread != bufsize) 
 	{
-	  perror("read");
-	  fprintf(stderr,"Read error or EOF\n");
-	  exit(1);
+	  bufsize = bytesread;
+	  nsamples = (int) rint(bufsize * smpwd / 4.0);
 	}
-
+ 
       /* unpack and downsample */
       switch (mode)
 	{
