@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.3  2003/09/18 19:51:43  cvs
+   Abort if input file cannot be opened.
+
    Revision 3.2  2003/09/18 02:52:44  cvs
    Improved command-line option error handling.
 
@@ -146,15 +149,15 @@ int main(int argc, char *argv[])
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
+  int invert;		/* swap i and q before fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
-  int invert = 0;	/* swap i and q before fft routine */
 
   fftw_plan p;
   int i,j,k,l,n;
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -357,7 +360,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -374,6 +377,7 @@ float   *freqmax;
 float   *rmsmin;
 float   *rmsmax;
 int     *dB;
+int     *invert;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -386,8 +390,8 @@ int     *dB;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lx:s:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lx:s:i"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -405,6 +409,7 @@ int     *dB;
   *timeseries = 0;
   *chan = 1;
   *dB = 0;		/* default is linear output */
+  *invert = 0;		
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
   *rmsmin  = 0;		/* not set value */
@@ -452,6 +457,11 @@ int     *dB;
 	
       case 'l':
 	*dB = 1;
+	arg_count += 1;
+	break;
+
+      case 'i':
+	*invert = 1;
 	arg_count += 1;
 	break;
 
