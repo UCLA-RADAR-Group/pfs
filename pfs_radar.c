@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.1  2002/05/12 16:00:54  cvs
+   Changed default values of i/o buffer sizes.
+
    Revision 2.0  2002/04/27 08:01:04  margot
    Variety of changes to accomodate POSIX threads and multiple output files.
 
@@ -136,6 +139,8 @@ int main(int argc, char *argv[])
   unsigned int on=0x01;
   struct tm go;
   int time_set = 0;
+  struct timeval timenow;
+  struct timezone tz;
 
   long long size;
   long  lcode = 7812500, lfft = 128;
@@ -368,6 +373,10 @@ int main(int argc, char *argv[])
       /* arm trigger */
       edt_reg_write( r->edt, PCD_FUNCT, 0x01 | (r->mode << 1));  
 
+      gettimeofday(&timenow,&tz);
+      fprintf(r->logfd, "cclock after toggle        %ld %ld\n", timenow.tv_sec, timenow.tv_usec);
+
+
 #ifdef TIMER
       /* set current time */
       now.tv_sec = 100000;
@@ -394,8 +403,10 @@ int main(int argc, char *argv[])
 	  printf("error \n");
 	else {
 	  if( i%50 == 0 ) {
-	    printf("\ni = %d count = %d\n", i, edt_done_count(r->edt));
+	    printf("\ni = %6d count = %6d\n", i, edt_done_count(r->edt));
             fflush( stdout );
+	    gettimeofday(&timenow,&tz);
+	    fprintf(r->logfd, "cclock after buffer %6d %ld %ld\n", i+1, timenow.tv_sec, timenow.tv_usec);
           }
 	  fprintf(stderr,".");
 	  if( edt_ring_buffer_overrun(r->edt)) {
@@ -411,10 +422,8 @@ int main(int argc, char *argv[])
 		    1000000*(then.tv_sec-now.tv_sec)+then.tv_usec-now.tv_usec); 
 	    then.tv_sec = now.tv_sec;
 	    then.tv_usec = now.tv_usec;
-#endif TIMER
-
+#endif
 	    /* copy data from EDT to disk write output buffer */
-
 	    memcpy(&w->out[r->dw_count*r->ameg], data, r->ameg);
             if( ++r->dw_count >= r->dw_multi ) {
               r->dw_count = 0;
@@ -809,14 +818,15 @@ pusage()
   fprintf( stderr, "  -m mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\n");
   fprintf( stderr, "  -dir d      directory to use\n");
   fprintf( stderr, "  -tape t     tape device to use\n");
-  fprintf( stderr, "  -secs sec   number of seconds of data to take (3600)\n");
+  fprintf( stderr, "  -secs sec   number of seconds of data to take (9000)\n");
   fprintf( stderr, "  -step sec   timestep between A/D cycles (0)\n");
   fprintf( stderr, "  -cycles c   number of repeat cycles (1)\n");
   fprintf( stderr, "  -start yyyy,mm,dd,hh,mm,ss start time\n\n");
-  fprintf( stderr, "  -files f    total number of files to open (1)\n");
+  fprintf( stderr, "  -files f    total number of files to open (40)\n");
   fprintf( stderr, "  -rings r    number of input buffers to use (8)\n");
-  fprintf( stderr, "  -bytes b    size of input ring buffer (1048576 bytes)\n");
-  fprintf( stderr, "  -code len   code length\n");
+  fprintf( stderr, "  -bytes b    size of input ring buffer (1e6 bytes)\n");
+  fprintf( stderr, "  -code len   code length (7812500)\n");
+  fprintf( stderr, "  -fft len    fft length (128)\n");
   fprintf( stderr, "  -log l      log file name \n");
   set_kb(0);
   exit(1);
