@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.3  2002/12/28 10:13:19  cvs
+   Made calculation of maximum file size more transparent.
+
    Revision 2.2  2002/12/28 07:47:25  cvs
    Added printout of computer clock value to logfile every 50 buffers.
 
@@ -78,6 +81,8 @@
 #include <stdlib.h> 
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "fcntl.h"
 #include "edtinc.h"
 #include "multifile.h"
@@ -150,6 +155,7 @@ int main(int argc, char *argv[])
   struct timeval timenow;
   struct timezone tz;
   long long size;
+  int fdlock;
 
 #ifdef TIMER
   struct timeval   now;
@@ -289,7 +295,7 @@ int main(int argc, char *argv[])
     }
 
   if( r->dir && r->istape ) {
-      fprintf(stderr,"Cant have disk and tape selected at once\n");
+      fprintf(stderr,"Can't have disk and tape selected at once\n");
       set_kb(0);
       exit(1);
   }
@@ -311,14 +317,22 @@ int main(int argc, char *argv[])
   printf("Starting the Portable Fast Sampler\n");
 
   /* open edt device */
-
   if ((r->edt = edt_open("edt", 0)) == NULL)
     {
       perror("edt_open") ;
       set_kb(0);
-      exit(1) ;
+      exit(1);
     }
   set_kb(1);
+  /* if successful, open lock file */
+  if (fdlock = open("pfs.lock",(O_RDWR|O_CREAT|O_EXCL),(S_IRWXU|S_IRWXG|S_IRWXO)) < 0)
+    {
+      fprintf(stderr,
+	      "Another process is accessing EDT card or a stale pfs.lock file exists.\n");
+      system("ps -ef | grep pfs_");
+      set_kb(0);
+      exit(1);
+    }
 
   /* block trigger immediately */
   edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1));
@@ -381,8 +395,9 @@ int main(int argc, char *argv[])
       edt_reg_write( r->edt, PCD_FUNCT, 0x01 | (r->mode << 1));  
 
       gettimeofday(&timenow,&tz);
-      fprintf(r->logfd, "cclock after toggle        %ld %ld\n", timenow.tv_sec, timenow.tv_usec);
-
+      fprintf(r->logfd, "cclock after toggle        %ld.%06ld\n", 
+	      timenow.tv_sec, timenow.tv_usec);
+      fflush(r->logfd);
 
 #ifdef TIMER
       /* set current time */
@@ -413,12 +428,15 @@ int main(int argc, char *argv[])
 	    printf("\ni = %6d count = %6d\n", i, edt_done_count(r->edt));
             fflush( stdout );
 	    gettimeofday(&timenow,&tz);
-	    fprintf(r->logfd, "cclock after buffer %6d %ld %ld\n", i+1, timenow.tv_sec, timenow.tv_usec);
+	    fprintf(r->logfd, "cclock after buffer %6d %ld.%06ld\n", 
+		    i+1, timenow.tv_sec, timenow.tv_usec);
+	    fflush(r->logfd);
           }
 	  fprintf(stderr,".");
 	  if( edt_ring_buffer_overrun(r->edt)) {
 	    printf("overrun %d\n",i );
 	    fprintf(r->logfd, "overrun %d\n" , i );
+	    fflush(r->logfd);
 	  } else {
 #ifdef TIMER
 	    /* read current timer value */
@@ -486,11 +504,17 @@ int main(int argc, char *argv[])
       edt_reg_write( r->edt, PCD_FUNCT, 0x00 | (r->mode << 1)); 
       edt_reset_ring_buffers(r->edt, 0);
       close_files(r);
+      if( ctlc_flag )
+	break;
     }
       
+
   edt_close(r->edt);
   fclose(r->logfd);
   set_kb(0);
+  unlink("pfs.lock");
+  close(fdlock);
+  exit(0);
 }
 
 /* disk_write thread */
@@ -722,6 +746,7 @@ struct RADAR *r;
       set_kb(0);
     exit(1);
   }
+  chown(r->log, getuid(), getgid());
   fprintf(r->logfd, "%s\n",rcsid);
   fprintf(r->logfd, "Input buffer size %d bytes\n", r->ameg );
   fprintf(r->logfd, "Input buffers, %d\n", r->ringbufs );
@@ -780,13 +805,13 @@ int makeraw;
 /*
    Timing notes.
 
-   Its important that we know the precise time the data was taken.
+   It is important that we know the precise time the data were taken.
    A one second timing pulse is provided to trigger the hardware to start
    dumping data. From the OS we need to arm this trigger.  The start time 
    is encoded in the filenames. But it takes some time to open files, malloc 
    all the buffers.  
 
-   Heres how we handle it.
+   Here is how we handle it.
 
    - We presume that the one second tick of the system clock is within +-0.5
      seconds of the timing pulse. This can be set and tested elsewhere. 
@@ -820,6 +845,7 @@ time_t ttt;
 
 pusage()
 {
+  fprintf( stderr, "%s\n", rcsid);
   fprintf( stderr, "Usage: pfs_radar -m mode -dir d [-secs sec] [-step sec] [-cycles c] [-start yyyy,mm,dd,hh,mm,ss]\n");
   fprintf( stderr, "                                             (defaults)\n");
   fprintf( stderr, "  -m mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\n");
