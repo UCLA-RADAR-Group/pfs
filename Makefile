@@ -18,7 +18,7 @@ all: $(PROGRAMS)
 # pfs_radar acquires data from the portable fast sampler
 #
 pfs_radar : pfs_radar.o multifile.o 
-	$(F77) pfs_radar.o multifile.o  \
+	$(CC) pfs_radar.o multifile.o  \
 	-L/opt/EDTpcd -ledt \
 	$(LDFLAGS) \
 	-lpthread \
@@ -27,7 +27,7 @@ pfs_radar : pfs_radar.o multifile.o
 # pfs_sample test samples some data from the portable fast sampler
 #
 pfs_sample : pfs_sample.o libunpack.o
-	$(F77) pfs_sample.o libunpack.o \
+	$(CC) pfs_sample.o libunpack.o \
 	-L/opt/EDTpcd -ledt \
 	$(LDFLAGS) \
 	-lpthread \
@@ -36,7 +36,7 @@ pfs_sample : pfs_sample.o libunpack.o
 # pfs_trigger tests the 1 PPS and clock signals
 #
 pfs_trigger : pfs_trigger.o 
-	$(F77) pfs_trigger.o \
+	$(CC) pfs_trigger.o \
 	-L/opt/EDTpcd -ledt \
 	$(LDFLAGS) \
 	-lpthread \
@@ -46,7 +46,7 @@ pfs_trigger : pfs_trigger.o
 # pfs_reset tests the 1 PPS and clock signals
 #
 pfs_reset : pfs_reset.o 
-	$(F77) pfs_reset.o \
+	$(CC) pfs_reset.o \
 	-L/opt/EDTpcd -ledt \
 	$(LDFLAGS) \
 	-lpthread \
@@ -55,7 +55,7 @@ pfs_reset : pfs_reset.o
 # pfs_levels sets the PFS attenuator levels
 #
 pfs_levels : pfs_levels.o 
-	$(F77) pfs_levels.o \
+	$(CC) pfs_levels.o \
 	-L/opt/EDTpcd -ledt \
 	$(LDFLAGS) \
 	-lpthread \
@@ -64,28 +64,28 @@ pfs_levels : pfs_levels.o
 # pfs_hist computes histograms of data from the portable fast sampler
 #
 pfs_hist : pfs_hist.o 
-	$(F77) pfs_hist.o libunpack.o \
+	$(CC) pfs_hist.o libunpack.o \
 	$(LDFLAGS) \
 	-o pfs_hist
 #
 # pfs_stats computes statistics of data from the portable fast sampler
 #
 pfs_stats : pfs_stats.o 
-	$(F77) pfs_stats.o libunpack.o \
+	$(CC) pfs_stats.o libunpack.o \
 	$(LDFLAGS) \
 	-o pfs_stats
 #
 # pfs_unpack unpacks data from the portable fast sampler
 #
 pfs_unpack : pfs_unpack.o 
-	$(F77) pfs_unpack.o libunpack.o \
+	$(CC) pfs_unpack.o libunpack.o \
 	$(LDFLAGS) \
 	-o pfs_unpack
 #
 # pfs_downsample downsamples data from the portable fast sampler
 #
 pfs_downsample : pfs_downsample.o 
-	$(F77) pfs_downsample.o libunpack.o \
+	$(CC) pfs_downsample.o libunpack.o \
 	$(LDFLAGS) \
 	-lpthread \
 	-o pfs_downsample
@@ -93,7 +93,7 @@ pfs_downsample : pfs_downsample.o
 # pfs_fft performs spectral analysis on data from the portable fast sampler
 #
 pfs_fft : pfs_fft.o 
-	$(F77) pfs_fft.o libunpack.o \
+	$(CC) pfs_fft.o libunpack.o \
 	-lfftw \
 	$(LDFLAGS) \
 	-o pfs_fft
@@ -101,14 +101,14 @@ pfs_fft : pfs_fft.o
 # pfs_dehop dehops fft spectra
 #
 pfs_dehop : pfs_dehop.o 
-	$(F77) pfs_dehop.o \
+	$(CC) pfs_dehop.o \
 	$(LDFLAGS) \
 	-o pfs_dehop
 #
 # pfs_skipbytes skips over unwanted data
 #
 pfs_skipbytes : pfs_skipbytes.o 
-	$(F77) pfs_skipbytes.o \
+	$(CC) pfs_skipbytes.o \
 	$(LDFLAGS) \
 	-o pfs_skipbytes
 #
