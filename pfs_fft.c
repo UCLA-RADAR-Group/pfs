@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 1.9  2002/05/02 05:48:59  cvs
+   Mode added to usage line
+
    Revision 1.8  2002/04/27 20:22:47  margot
    Removed obsolete routines specific to Golevka Sampling Box.
 
@@ -114,7 +117,8 @@ int main(int argc, char *argv[])
   float rmsmax;		/* max frequency for rms calculation */
   double fsamp;		/* sampling frequency, MHz */
   double freqres;	/* frequency resolution, Hz */
-  double mean,var;	/* needed for rms computation */
+  double mean = 0;	/* needed for rms computation */
+  double var = 0;	/* needed for rms computation */
   double sigma = 1;	/* needed for rms computation */
   int downsample;	/* downsampling factor, dimensionless */
   int sum;		/* number of transforms to add, dimensionless */
@@ -580,7 +584,7 @@ void swap_freq(float *data, int len)
 
   for (i=0, j=len; i<len; i++, j++)
     {
-      temp=data[i];
+      temp    = data[i];
       data[i] = data[j];
       data[j] = temp;
     }
