@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 3.0  2003/02/25 22:40:14  cvs
+   Adapted to use Joseph Jao's byte unpacking.
+
    Revision 2.3  2002/06/05 16:56:01  cvs
    Added > sign for easier parsing of output.
 
@@ -221,7 +224,7 @@ int main(int argc, char *argv[])
 	  break;
 	case 32: 
 	  memcpy (fbuffer, buffer, bufsize);
-	  floatsum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  floatsum(fbuffer, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  break;
 	default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
 	}
