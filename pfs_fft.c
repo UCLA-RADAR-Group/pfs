@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.4  2003/11/09 03:28:12  cvs
+   Added -i option for IQ swap.
+
    Revision 3.3  2003/09/18 19:51:43  cvs
    Abort if input file cannot be opened.
 
@@ -348,9 +351,9 @@ int main(int argc, char *argv[])
 	  if ((freqmin == 0.0 && freqmax == 0.0) || (freq >= freqmin && freq <= freqmax)) 
 	  {
 	    if (dB)
-	      fprintf(fpoutput,"%.3f %f\n",freq,10*log10((total[i]-mean)/sigma));
+	      fprintf(fpoutput,"% .3f % .3f\n",freq,10*log10((total[i]-mean)/sigma));
 	    else
-	      fprintf(fpoutput,"%.3f %.1f\n",freq,(total[i]-mean)/sigma);  
+	      fprintf(fpoutput,"% .3f % .3f\n",freq,(total[i]-mean)/sigma);  
 	  }
       }
   
