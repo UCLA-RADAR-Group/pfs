@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2000/10/30 22:03:40  margot
+   Stop time now based on clock rather than buffer count.
+
    Revision 1.2  2000/10/30 04:32:32  margot
    Fixed three bugs corresponding to gsb_radar revisions 2.2 -> 2.4
    1) thr_join() did not join on previous diskwrite thread.
@@ -129,6 +132,7 @@ int main(int argc, char *argv[])
   struct itimerval mytimer;
 #endif
 
+  /* set defaults */
   r = &radar;
   bzero( r, sizeof(struct RADAR ));
   r->ringbufs = RINGBUFS;
@@ -140,6 +144,8 @@ int main(int argc, char *argv[])
   w = NULL;
 
   dirhead = NULL;
+
+  /* process the command line */
   for( i=1; i<argc; i++ ) {
     p = argv[i];
     if( strncasecmp( p, "-secs", strlen(p) ) == 0 ) {
@@ -166,10 +172,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "bad value for -files\n");
         pusage();
       }
-    } else if( strncasecmp( p, "-mode", strlen(p) ) == 0 ) {
+    } else if( strncasecmp( p, "-m", strlen(p) ) == 0 ) {
       p = argv[++i];
       if((r->mode = atoi(p))<0 ) {
-        fprintf(stderr, "bad value for -mode\n");
+        fprintf(stderr, "bad value for -m\n");
         pusage();
       }
     } else if( strncasecmp( p, "-start", strlen(p) ) == 0 ) {
@@ -688,14 +694,15 @@ time_t ttt;
 
 pusage()
 {
-  fprintf( stderr, "Usage: pfs_radar -dir d [-dir d]... [-mode mode] [-secs sec] [-step sec] [-cycles c] [-files f] [-rings r] [-nopack]\n");
+  fprintf( stderr, "Usage: pfs_radar -m mode -dir d [-secs sec] [-step sec] [-cycles c] [-start yyyy,mm,dd,hh,mm,ss]\n");
   fprintf( stderr, "                                             (defaults)\n");
-  fprintf( stderr, "  -mode mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n");
+  fprintf( stderr, "  -m mode\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\n");
+  fprintf( stderr, "  -dir d      directory to use\n");
   fprintf( stderr, "  -secs sec   number of seconds of data to take (3600)\n");
   fprintf( stderr, "  -step sec   timestep between A/D cycles (0)\n");
   fprintf( stderr, "  -cycles c   number of repeat cycles (1)\n");
+  fprintf( stderr, "  -start yyyy,mm,dd,hh,mm,ss start time\n\n");
   fprintf( stderr, "  -files f    total number of files to open (1)\n");
-  fprintf( stderr, "  -dir d      directory to use, multiples allowed\n");
   fprintf( stderr, "  -rings r    number of input buffers to use (8)\n");
   fprintf( stderr, "  -bytes b    size of input ring buffer (1048576 bytes)\n");
   fprintf( stderr, "  -log l      log file name \n");
