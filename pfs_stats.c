@@ -6,11 +6,13 @@
 *  all channels
 *
 *  usage:
-*  	pfs_stats -m mode [-a (parse all data)] [-o outfile] [infile]
+*  	pfs_stats -m mode [-a (parse all data)] [-e (parse data at eof)]
+*                [-o outfile] [infile]
 *
 *  input:
 *       the input parameters are typed in as command line arguments
 *	the -m option specifies the data acquisition mode
+*       the -e option specifies to parse data at the end of the file
 *	the -a option specifies to parse all the data recorded
 *                     (default is to parse the first megabyte)
 *
@@ -21,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2000/10/30 22:42:32  margot
+   Added voltage scale.
+
    Revision 1.2  2000/10/30 05:20:46  margot
    Added variable nsamples.
 
@@ -64,11 +69,12 @@ int main(int argc, char *argv[])
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
-  int parseall;
+  int parse_all;
+  int parse_end;
   int i;
 
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&parseall);
+  processargs(argc,argv,&infile,&outfile,&mode,&parse_all,&parse_end);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -83,7 +89,10 @@ int main(int argc, char *argv[])
   open_flags = O_RDONLY;
 #endif
   if((fdinput = open(infile, open_flags)) < 0 )
-    perror("open input file");
+    {
+      perror("open input file");
+      exit(1);
+    }
 
   switch (mode)
     {
@@ -93,24 +102,31 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; levels = 256; break; 
     case  5: smpwd = 4; levels =   4; break;
     case  6: smpwd = 2; levels =  16; break;
+    case  8: smpwd = 2; levels = 256; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
+  buffer = (char *) malloc(bufsize);
   rcp = (float *) malloc(2 * nsamples * sizeof(float));
   lcp = (float *) malloc(2 * nsamples * sizeof(float));
-  buffer = (char *) malloc(bufsize);
-  if (buffer == NULL)
+  if (lcp == NULL)
     {
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
     }
 
+  if (parse_end)
+    lseek(fdinput, -bufsize, SEEK_END);
+
   /* read first buffer */
   if (bufsize != read(fdinput, buffer, bufsize))
-    fprintf(stderr,"Read error\n");
-  
+    {
+      fprintf(stderr,"Read error\n");
+      exit(1);
+    }
+
   switch (mode)
     { 
     case -1:
@@ -142,6 +158,10 @@ int main(int argc, char *argv[])
       iq_stats(rcp, nsamples, levels);
       fprintf(fpoutput,"LCP stats\n");
       iq_stats(lcp, nsamples, levels);
+      break;
+    case 8: 
+      unpack_pfs_signedbytes(buffer, rcp, bufsize);
+      iq_stats(rcp, nsamples, levels);
       break;
 
     default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
@@ -206,13 +226,14 @@ void iq_stats(float *inbuf, int nsamples, int levels)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,parseall)
+void	processargs(argc,argv,infile,outfile,mode,parse_all,parse_end)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
 char	**outfile;		 /* output file name */
 int     *mode;
-int     *parseall;
+int     *parse_all;
+int     *parse_end;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_stats program:
@@ -225,9 +246,9 @@ int     *parseall;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:a"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_stats -m mode [-a (parse all data)] [-o outfile] [infile] ";
-  char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
+  char *myoptions = "m:o:ae"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_stats -m mode [-e (parse data at eof)] [-a (parse all data)] [-o outfile] [infile] ";
+  char *USAGE2="Valid modes are\n\t-1: GSB\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
 
@@ -237,7 +258,8 @@ int     *parseall;
   *outfile = "-";
 
   *mode  = 0;                /* default value */
-  *parseall = 0;
+  *parse_all = 0;
+  *parse_end = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -255,7 +277,12 @@ int     *parseall;
 	       break;
 	    
       case 'a':
- 	       *parseall = 1;
+ 	       *parse_all = 1;
+               arg_count += 1;
+	       break;
+	    
+      case 'e':
+ 	       *parse_end = 1;
                arg_count += 1;
 	       break;
 	    
@@ -272,7 +299,7 @@ int     *parseall;
   if (*mode == 0) goto errout;
   
   /* code still in development */
-  if (*parseall)
+  if (*parse_all)
     {
       fprintf(stderr,"-a option not implemented yet\n"); 
       exit(1);
