@@ -8,7 +8,7 @@
 *  usage:
 *  	pfs_skipbytes  -b nbytes [-n nreads] 
 *                     [-s nskipbuffs,nskipbytes] 
-*                     [-r startbyte,stopbyte (zero-based)]
+*                     [-r startbyte,stopbyte (one-based)]
 *                     [-o outfile] infile
 *
 *  input:
@@ -25,6 +25,9 @@
 
 /* 
    $Log$
+   Revision 1.3  2002/05/02 05:50:00  cvs
+   Explained zero-based arrays in usage line
+
    Revision 1.2  2002/04/27 20:26:00  margot
    Changed location of include file for O_LARGEFILE
 
@@ -78,16 +81,28 @@ int main(int argc, char *argv[])
 
   /* check error conditions */
   if (nskipbytes > nbytes)
-    exit(1);
+    {
+      fprintf(stderr,"Skipbyte must be within a buffer's worth of data\n");
+      exit(1);
+    }
+  
+  if (startbyte < 1 || startbyte > nbytes)
+    {
+      fprintf(stderr,"Startbyte must be within a buffer's worth of data\n");
+      exit(1);
+    }
 
-  if (startbyte < 0 || startbyte > nbytes)
-    exit(1);
-
-  if (stopbyte < 0 || stopbyte > nbytes)
-    exit(1);
+  if (stopbyte < 1 || stopbyte > nbytes)
+    {
+      fprintf(stderr,"Stopbyte must be within a buffer's worth of data\n");
+      exit(1);
+    }
   
   if (stopbyte < startbyte)
-    exit(1);
+    {
+      fprintf(stderr,"Stopbyte must be larger than startbyte\n");
+      exit(1);
+    }
 
   /* allocate data buffers */
   buffer = (char *) malloc(nbytes);
@@ -142,7 +157,7 @@ int main(int argc, char *argv[])
     {
       if (nbytes != read(fdinput, buffer, nbytes))
 	fprintf(stderr,"Read error\n");
-      if (1 != fwrite(&buffer[startbyte],stopbyte-startbyte+1,1,fpoutput))
+      if (1 != fwrite(&buffer[startbyte-1],stopbyte-startbyte+1,1,fpoutput))
 	fprintf(stderr,"Write error!\n"); 
       buffcount++;
     }
@@ -177,7 +192,7 @@ int     *stopbyte;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "b:n:s:r:o:"; 	 /* options to search for :=> argument*/
-  char *USAGE="pfs_skipbytes -b nbytes [-n nreads] [-s nskipbuffs,nskipbytes] [-r startbyte,stopbyte (zero-based)] [-o outfile] infile";
+  char *USAGE="pfs_skipbytes -b nbytes [-n nreads] [-s nskipbuffs,nskipbytes] [-r startbyte,stopbyte (one-based)] [-o outfile] infile";
 
   int  i;
   int  c;			 /* option letter returned by getopt  */
@@ -188,7 +203,7 @@ int     *stopbyte;
   *outfile = "-";		 /* initialise to stdout */
 
   *nbytes  = -1;		 /* no default value */
-  *nreads  = 10;
+  *nreads  = 1e30;
   *nskipbuffs = 0;
   *nskipbytes = 0;
   *startbyte = 1;
