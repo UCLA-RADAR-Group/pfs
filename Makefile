@@ -8,8 +8,8 @@
 include Makefile.inc
 #
 #
-PROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
-OBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
+OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
 #
 #
 all: $(PROGRAMS)
@@ -63,7 +63,7 @@ pfs_levels : pfs_levels.o
 #
 # pfs_hist computes histograms of data from the portable fast sampler
 #
-pfs_hist : pfs_hist.o 
+pfs_hist : pfs_hist.o libunpack.o
 	$(CC) pfs_hist.o libunpack.o \
 	$(LDFLAGS) \
 	-o pfs_hist
