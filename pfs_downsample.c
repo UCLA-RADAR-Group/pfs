@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 3.11  2007/06/14 19:08:51  jlm
+   Starting to restore some order to bytestoskip situation.  More work ahead.
+
    Revision 3.10  2007/06/14 18:20:51  jlm
    Added quiet mode with -q option for those who desire to suppress
    informational messages.
@@ -134,6 +137,7 @@ int	swapiq = 0;	/* swap I/Q */
 int	downsample;	/* factor by which to downsample */
 int     nsamples; 	/* # of complex samples in each buffer */
 float	smpwd;		/* # of single pol complex samples in a 4 byte word */
+float   wordstoskip=0.0;/* number of 4-byte words to skip */
 float   bytestoskip=0.0;/* number of bytes to skip */
 float   remainingbytestoskip=0.0;/* number of remaining bytes to skip after lseek call */
 
@@ -227,25 +231,26 @@ int main(int argc, char *argv[])
 			 filestat.st_size);
 
   /* skip samples if needed */
+  /* but skip along 4-byte boundaries only */
+  /* remaining bytes to skip, including half bytes in mode 1 (2c2b), are handled after unpacking */
   if (samplestoskip != 0)
   {
-    /* 03/05/04 SWJ: bytes-to-skip can have half byte in mode 1 (2c2b) */
-    /* 06/28/04 SWJ: bytestoskip now is acturally words-to-skip for 4-byte alignment */
-    bytestoskip = samplestoskip / smpwd;
-    if (verbose) fprintf(stderr, "Skipping %d complex samples, equivalent to %.1f bytes\n", 
-			 samplestoskip, bytestoskip * 4);
+    wordstoskip = samplestoskip / smpwd;
+    bytestoskip = wordstoskip * 4;
+    if (verbose) fprintf(stderr, "Skipping %d complex samples, equivalent to %.1f words, equivalent to %.1f bytes\n", 
+			 samplestoskip, wordstoskip, bytestoskip);
     
-    /* skip desired amount of bytes (note: skip for multiple of 4-byte only) */
-    if (4 * (int) bytestoskip != lseek(fdinput, 4 * (int) bytestoskip, SEEK_SET))
+    /* skip desired amount of bytes */
+    if ((int) bytestoskip != lseek(fdinput, (int) bytestoskip, SEEK_SET))
       {
         perror("lseek");
-        fprintf(stderr, "Unable to skip %d bytes\n", 4 * (int)bytestoskip);
+        fprintf(stderr, "Unable to skip %d bytes\n", (int) bytestoskip);
         exit(1);
       }
 
     /* compute the number of remaining samples to skip, if any.
        if this number is nonzero, it will be taken care of after unpacking */
-    remainingbytestoskip = (int) ((bytestoskip - (int) bytestoskip) * 4);
+    remainingbytestoskip = (int) ((wordstoskip - (int) wordstoskip) * 4);
 
     /* test new size compatibility */
     if ((filestat.st_size - (int) bytestoskip) % 4 != 0)
@@ -538,7 +543,7 @@ void *iq_downsample (void *pdata)
     }
 
     /* byte skipping on begining of data segment only */
-    bytestoskip = 0.0;
+    remainingbytestoskip = 0.0;
   }
 
   for (; bcnt > 0; bcnt--)
