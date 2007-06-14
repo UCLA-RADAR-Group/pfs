@@ -28,6 +28,11 @@
 
 /* 
    $Log$
+   Revision 3.8  2007/06/14 17:34:56  jlm
+   Added clipping flag for detection and reporting of clipping situations.
+   This frees up verbose variable that will be used for other informational
+   messages.
+
    Revision 3.7  2005/02/22 19:53:31  jao
    Added '-i' option for I & Q swapping.
 
@@ -114,7 +119,7 @@ char	header[40];		/* data file name header */
 int	ext;			/* data file extension */
 int	open_flags;	/* flags required for open() call */
 struct  stat filestat;	/* input file status structure */
-int	verbose = 0;    /* verbosity level */
+int	verbose = 1;    /* verbosity level */
 int     clipping = 0;	/* flag for detection and reporting of clipping */
 int	floats  = 1;    /* default output format is floating point */
 int	allfiles = 0;   /* data file to be processed */
@@ -205,15 +210,13 @@ int main(int argc, char *argv[])
       exit(1);
       } 
   
-  /* 03/05/04 SWJ
-  /* test size compatibility  
+  /* test size compatibility */
   if (filestat.st_size % 4 != 0)
-    fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", 
-	    filestat.st_size);
+    if (verbose) fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", 
+			 filestat.st_size);
   if (filestat.st_size % downsample != 0)
-    fprintf(stderr,"Warning: file size %d not a multiple of dwnsmplng factor\n",
-	    filestat.st_size);
-  */
+    if (verbose) fprintf(stderr,"Warning: file size %d not a multiple of dwnsmplng factor\n",
+			 filestat.st_size);
 
   /* skip samples if needed */
   if (samplestoskip != 0)
@@ -221,9 +224,9 @@ int main(int argc, char *argv[])
     /* 03/05/04 SWJ: bytes-to-skip can have half byte in mode 1 (2c2b) */
     /* 06/28/04 SWJ: bytestoskip now is acturally words-to-skip for 4-byte alignment */
     bytestoskip = samplestoskip / smpwd;
-    fprintf(stderr, "Skipping %d complex samples, equivalent to %f bytes\n", 
-	    samplestoskip, bytestoskip * 4);
-
+    if (verbose) fprintf(stderr, "Skipping %d complex samples, equivalent to %.1f bytes\n", 
+			 samplestoskip, bytestoskip * 4);
+    
     /* skip desired amount of bytes (note: skip for multiple of 4-byte only) */
     if (4 * (int) bytestoskip != lseek(fdinput, 4 * (int) bytestoskip, SEEK_SET))
       {
@@ -235,16 +238,13 @@ int main(int argc, char *argv[])
     /* 06/28/04 SWJ: calculate true bytestoskip to be done after unpacking */
     bytestoskip = (int) ((bytestoskip - (int) bytestoskip) * 4);
 
-
-    /* 03/05/04 SWJ
-    /* test new size compatibility 
+    /* test new size compatibility */
     if ((filestat.st_size - (int) bytestoskip) % 4 != 0)
-      fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of 4\n",
-	      filestat.st_size,bytestoskip);
+      if (verbose) fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of 4\n",
+			   filestat.st_size,bytestoskip);
     if ((filestat.st_size - (int) bytestoskip) % downsample != 0)
-      fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of dwnsmplng factor\n", 
-	      filestat.st_size,bytestoskip);
-    */
+      if (verbose) fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of dwnsmplng factor\n", 
+			   filestat.st_size,bytestoskip);
   }
 
   /* open output file, stdout is default */
@@ -257,8 +257,8 @@ int main(int argc, char *argv[])
   }
 
   /* compute dynamic range parameters */
-  fprintf(stderr,"Downsampling file of size %d KB by %d\n", 
-	  (int) (filestat.st_size / 1000), downsample);
+  if (verbose) fprintf(stderr,"Downsampling file of size %d kB by %d\n", 
+		       (int) (filestat.st_size / 1000), downsample);
   maxvalue = maxunpack * sqrt(downsample);
   scale = fudge * 0.25 * 128 / maxvalue;
 
@@ -273,11 +273,9 @@ int main(int argc, char *argv[])
   /* we need a multiple of the downsampling factor, or order 1 MB */
   bufsize = (int) rint(1000000.0/downsample) * downsample;
 
-  /* SWJ 06/28/04  deleted due to irrelavent with '-a' option
-  fprintf(stderr,"Using %d buffers of size %d\n", 
-	  (int) floor((filestat.st_size - bytestoskip) / bufsize), bufsize);
-  */
-
+  if (verbose) fprintf(stderr,"Using %d buffers of size %d\n", 
+		       (int) floor((filestat.st_size - bytestoskip) / bufsize), bufsize);
+  
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer1 = (unsigned char *) malloc(bufsize);
@@ -372,7 +370,7 @@ int main(int argc, char *argv[])
 	bufsize = cntlbuf.bytesread;
 
 	nsamples = (int) rint(bufsize * smpwd / 4.0);
-	fprintf(stderr,"And one buffer of size %d\n", bufsize);
+	if (verbose) fprintf(stderr,"And one buffer of size %d\n", bufsize);
     }
 
     /* only process last buffer read size */
@@ -416,7 +414,7 @@ void *read_buf (void *rdata) {
 	close (fdinput);
 
 	sprintf (infile, "%s.%3.3d", &header[0], ++ext);
-	printf ("reading filename \"%s\"\n", infile);
+	if (verbose) fprintf(stderr, "downsampling next file in sequence: \"%s\"\n", infile);
 
 	/* valid data file? */
 	if        ((fdinput = open(infile, open_flags)) < 0) {
@@ -513,7 +511,7 @@ void *iq_downsample (void *pdata)
   /* 03/05/04 SWJ - need to skip 1st sample ?  */
   if (bytestoskip > 0.0) {
     j = bytestoskip;
-    printf ("***** Skipping %d extra sample ***** \n", j);
+    if (verbose) fprintf(stderr,"***** Skipping %d extra sample ***** \n", j);
     while (j > 0) {
       bcnt --;
       j --;
@@ -523,7 +521,7 @@ void *iq_downsample (void *pdata)
       *inbuf++;
     }
 
-    /* byte skipping on begining of data segemnt only */
+    /* byte skipping on begining of data segment only */
     bytestoskip = 0.0;
   }
 
@@ -586,8 +584,6 @@ void *iq_downsample (void *pdata)
   }
 
   /* 03/05/04 SWJ  if (l != nbytes) fprintf(stderr,"oops\n"); */
-
-
   
   /* print diagnostics */
   if (clipping && !floats) 
