@@ -28,6 +28,10 @@
 
 /* 
    $Log$
+   Revision 3.10  2007/06/14 18:20:51  jlm
+   Added quiet mode with -q option for those who desire to suppress
+   informational messages.
+
    Revision 3.9  2007/06/14 18:11:59  jlm
    Restored printing of informational messages with verbose variable.
 
@@ -131,6 +135,7 @@ int	downsample;	/* factor by which to downsample */
 int     nsamples; 	/* # of complex samples in each buffer */
 float	smpwd;		/* # of single pol complex samples in a 4 byte word */
 float   bytestoskip=0.0;/* number of bytes to skip */
+float   remainingbytestoskip=0.0;/* number of remaining bytes to skip after lseek call */
 
 int	mode;		/* data acquisition mode */
 int     chan;		/* channel to process (1 or 2) for dual pol data */
@@ -215,10 +220,10 @@ int main(int argc, char *argv[])
   
   /* test size compatibility */
   if (filestat.st_size % 4 != 0)
-    if (verbose) fprintf(stderr,"Warning: file size %d is not a multiple of 4\n", 
+    if (verbose) fprintf(stderr,"Warning: file size %lld is not a multiple of 4\n", 
 			 filestat.st_size);
   if (filestat.st_size % downsample != 0)
-    if (verbose) fprintf(stderr,"Warning: file size %d not a multiple of dwnsmplng factor\n",
+    if (verbose) fprintf(stderr,"Warning: file size %lld not a multiple of dwnsmplng factor\n",
 			 filestat.st_size);
 
   /* skip samples if needed */
@@ -238,16 +243,17 @@ int main(int argc, char *argv[])
         exit(1);
       }
 
-    /* 06/28/04 SWJ: calculate true bytestoskip to be done after unpacking */
-    bytestoskip = (int) ((bytestoskip - (int) bytestoskip) * 4);
+    /* compute the number of remaining samples to skip, if any.
+       if this number is nonzero, it will be taken care of after unpacking */
+    remainingbytestoskip = (int) ((bytestoskip - (int) bytestoskip) * 4);
 
     /* test new size compatibility */
     if ((filestat.st_size - (int) bytestoskip) % 4 != 0)
-      if (verbose) fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of 4\n",
-			   filestat.st_size,bytestoskip);
+      if (verbose) fprintf(stderr,"Warning: file size %lld with %.1f byte skip not a multiple of 4\n",
+			   filestat.st_size, bytestoskip);
     if ((filestat.st_size - (int) bytestoskip) % downsample != 0)
-      if (verbose) fprintf(stderr,"Warning: file size %d w %d b skip not a multiple of dwnsmplng factor\n", 
-			   filestat.st_size,bytestoskip);
+      if (verbose) fprintf(stderr,"Warning: file size %lld with %.1f byte skip not a multiple of dwnsmplng factor\n", 
+			   filestat.st_size, bytestoskip);
   }
 
   /* open output file, stdout is default */
@@ -275,6 +281,13 @@ int main(int argc, char *argv[])
   /* compute buffer size */
   /* we need a multiple of the downsampling factor, or order 1 MB */
   bufsize = (int) rint(1000000.0/downsample) * downsample;
+  /* but the buffer size must be smaller than the file size */
+  if (bufsize > (filestat.st_size - (int) bytestoskip)) 
+    {
+      bufsize = filestat.st_size - (int) bytestoskip;
+      if (verbose) fprintf(stderr,"Reducing buffer size to file size minus bytes to skip: %d\n",
+			   bufsize);
+    }
 
   if (verbose) fprintf(stderr,"Using %d buffers of size %d\n", 
 		       (int) floor((filestat.st_size - bytestoskip) / bufsize), bufsize);
@@ -512,8 +525,8 @@ void *iq_downsample (void *pdata)
   bcnt = nsamples / downsample;
 
   /* 03/05/04 SWJ - need to skip 1st sample ?  */
-  if (bytestoskip > 0.0) {
-    j = bytestoskip;
+  if (remainingbytestoskip > 0.0) {
+    j = remainingbytestoskip;
     if (verbose) fprintf(stderr,"***** Skipping %d extra sample ***** \n", j);
     while (j > 0) {
       bcnt --;
