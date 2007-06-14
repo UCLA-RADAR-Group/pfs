@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 3.12  2007/06/14 20:42:05  jlm
+   Introduced wordstoskip to continue straightening out wordstoskip situation.
+
    Revision 3.11  2007/06/14 19:08:51  jlm
    Starting to restore some order to bytestoskip situation.  More work ahead.
 
@@ -437,10 +440,10 @@ void *read_buf (void *rdata) {
 	sprintf (infile, "%s.%3.3d", &header[0], ++ext);
 	if (verbose) fprintf(stderr, "downsampling next file in sequence: \"%s\"\n", infile);
 
-	/* valid data file? */
-	if        ((fdinput = open(infile, open_flags)) < 0) {
-	    /* SWJ: last file doesn't exist, not an erroneous situation
-		 perror ("open"); */
+	/* the program must stop after reading the file with the highest extension */
+	/* we assume that if the file with the next extension does not exist, 
+	   we have reached the end */
+	if ((fdinput = open(infile, open_flags)) < 0) {
 	    return;
 	} else if (fstat (fdinput, &filestat) < 0) {
 	    perror("fstat");
