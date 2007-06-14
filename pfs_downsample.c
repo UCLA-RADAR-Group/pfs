@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 3.9  2007/06/14 18:11:59  jlm
+   Restored printing of informational messages with verbose variable.
+
    Revision 3.8  2007/06/14 17:34:56  jlm
    Added clipping flag for detection and reporting of clipping situations.
    This frees up verbose variable that will be used for other informational
@@ -634,8 +637,8 @@ int 	*samplestoskip;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:d:c:s:I:Q:b:f:ax"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-a all data files] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-i (swap I/Q)] [-o outfile] [infile] ";
+  char *myoptions = "m:o:d:c:s:I:Q:b:f:axq"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-a downsample all data files] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-i (swap I/Q)] [-q (quiet mode)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -655,6 +658,7 @@ int 	*samplestoskip;
   floats = 1;
   allfiles = 0;
   swapiq = 0;
+  verbose = 1;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
@@ -708,6 +712,11 @@ int 	*samplestoskip;
 
     case 'i':
       swapiq = 1;
+      arg_count += 1;
+      break;
+
+    case 'q':
+      verbose = 0;
       arg_count += 1;
       break;
 
