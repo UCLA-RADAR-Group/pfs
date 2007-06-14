@@ -28,7 +28,10 @@
 
 /* 
    $Log$
-   Revision 3.6  2004/04/19 20:24:45  cvs
+   Revision 3.7  2005/02/22 19:53:31  jao
+   Added '-i' option for I & Q swapping.
+
+   Revision 3.6  2004/04/19 20:24:45  jao
    Added new option '-a' to process all data files.
    Take care half byte situation when skipping bytes in mode 1.
 
@@ -111,14 +114,15 @@ char	header[40];		/* data file name header */
 int	ext;			/* data file extension */
 int	open_flags;	/* flags required for open() call */
 struct  stat filestat;	/* input file status structure */
-int	verbose = 0;
+int	verbose = 0;    /* verbosity level */
+int     clipping = 0;	/* flag for detection and reporting of clipping */
 int	floats  = 1;    /* default output format is floating point */
-int	allfiles = 0;    /* data file to be processed */
+int	allfiles = 0;   /* data file to be processed */
 int	swapiq = 0;	/* swap I/Q */
 int	downsample;	/* factor by which to downsample */
 int     nsamples; 	/* # of complex samples in each buffer */
 float	smpwd;		/* # of single pol complex samples in a 4 byte word */
-float bytestoskip=0.0;	/* number of bytes to skip */
+float   bytestoskip=0.0;/* number of bytes to skip */
 
 int	mode;		/* data acquisition mode */
 int     chan;		/* channel to process (1 or 2) for dual pol data */
@@ -261,8 +265,8 @@ int main(int argc, char *argv[])
   if (!floats && maxvalue > 255)
     {
       fprintf(stderr,"You may have a dynamic range problem\n");
-      fprintf(stderr,"Turning verbose mode on so you can detect clipping\n");
-      verbose = 1;
+      fprintf(stderr,"Turning clipping mode on so you can detect clipping instances\n");
+      clipping = 1;
     }
 
   /* compute buffer size */
@@ -586,7 +590,7 @@ void *iq_downsample (void *pdata)
 
   
   /* print diagnostics */
-  if (verbose && !floats) 
+  if (clipping && !floats) 
     fprintf(stderr,"this buffer: output samples %d nclipped %d\n",
 	    nbytes,nclipped); 
 
