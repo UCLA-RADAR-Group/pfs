@@ -39,6 +39,10 @@
 
 /* 
    $Log$
+   Revision 3.6  2006/09/16 22:08:28  jlm
+   Added -b option for output in binary format.  Previously the -t option
+   was used to get a similar output, but with more restrictions.
+
    Revision 3.5  2003/11/19 01:33:24  cvs
    Improved output format.
 
@@ -119,6 +123,7 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 void vector_power(float *data, int len);
+void vector_window(float *data, int len);
 void swap_freq(float *data, int len);
 void swap_iandq(float *data, int len);
 void zerofill(float *data, int len);
@@ -157,6 +162,7 @@ int main(int argc, char *argv[])
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
   int invert;		/* swap i and q before fft routine */
+  int window;		/* apply Hanning window before fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
 
@@ -165,7 +171,7 @@ int main(int argc, char *argv[])
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&window);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -300,6 +306,7 @@ int main(int argc, char *argv[])
 
       /* transform, swap, and compute power */
       if (invert) swap_iandq(fftinbuf,fftlen); 
+      if (window) vector_window(fftinbuf,fftlen);
       fftw_one(p, (fftw_complex *)fftinbuf, (fftw_complex *)fftoutbuf);
       if (swap) swap_freq(fftoutbuf,fftlen); 
       vector_power(fftoutbuf,fftlen);
@@ -369,9 +376,31 @@ int main(int argc, char *argv[])
 }
 
 /******************************************************************************/
+/*	vector_window							      */
+/******************************************************************************/
+void vector_window(float *data, int len)
+{
+  /* Hanning windows the data array of length 'len' (complex samples)
+  */
+  float  weight;		/* calculated weight */
+  double n_minus_1;		/* weight calculation scale */
+  int    i,j,k;
+
+  n_minus_1 = 1.0/(double)(len - 1);
+
+  for (i=0, j=0, k=1; i<len; i++, j+=2, k+=2)
+  {
+    weight = (float)(0.5 - 0.5 * cos( 2 * M_PI * (double)i * n_minus_1 ) );
+    data[j] *= weight;
+    data[k] *= weight;
+  }
+  return;
+}
+
+/******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,window)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -390,6 +419,7 @@ float   *rmsmin;
 float   *rmsmax;
 int     *dB;
 int     *invert;
+int     *window;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -402,8 +432,8 @@ int     *invert;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:i"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iw"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -422,7 +452,8 @@ int     *invert;
   *timeseries = 0;
   *chan = 1;
   *dB = 0;		/* default is linear output */
-  *invert = 0;		
+  *invert = 0;
+  *window = 0;
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
   *rmsmin  = 0;		/* not set value */
@@ -475,6 +506,11 @@ int     *invert;
 
       case 'i':
 	*invert = 1;
+	arg_count += 1;
+	break;
+
+      case 'w':
+	*window = 1;
 	arg_count += 1;
 	break;
 
