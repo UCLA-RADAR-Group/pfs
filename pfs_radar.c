@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 2.6  2003/04/21 18:47:35  cvs
+   Added '-comment' option to log ops information
+
    Revision 2.5  2003/01/08 18:33:20  cvs
    Lock file in /tmp/pfs.lock
 
@@ -395,7 +398,7 @@ int main(int argc, char *argv[])
 
       /* obtain time string and open files */
       get_tms(r->start,r->timestr); 
-      open_files(r);
+      if (open_files(r) == -1) { break; }
 
       fprintf(stdout  , "\nCycle %d will start at %s\n" , cycle, r->timestr );
       fprintf(r->logfd, "\nCycle %d starting at %s\n" , cycle, r->timestr );
@@ -645,7 +648,7 @@ struct RADAR *r;
   head is the linked list of directory names to be used in opening files
 */
 
-open_files(r)
+int open_files(r)
 struct RADAR *r;
 {
   int i, tape_fd;
@@ -661,14 +664,19 @@ struct RADAR *r;
     if((tape_fd = open( r->istape, O_WRONLY, 0666 ))<0 ) {
       fprintf( stderr, "cant open tape device %s\n", r->istape );
       set_kb(0);
-      exit(1);
+      return (-1);
     }
     printf("opened tape device %s\n", r->istape );
 
   } else {
 
     sprintf(name, "%s/data%s", r->dir, r->timestr );
-    fd = multi_open(name, O_WRONLY|O_CREAT, 0664, r->nfiles );
+
+    // SWJ 11/17/06 added O_EXCL flag to prevent accidently overriding the existing files
+    if ((fd = multi_open(name, O_WRONLY|O_CREAT|O_EXCL, 0664, r->nfiles )) == NULL) {
+      perror ("pfs_radar() multi_open() error");
+      return (-1);
+    }
   }
 
   for( i=0; i< 2; i++ ) {
@@ -676,6 +684,8 @@ struct RADAR *r;
     w->fd = fd;
     w->tape_fd = tape_fd;
   }
+
+  return (0);
 }
 
 
