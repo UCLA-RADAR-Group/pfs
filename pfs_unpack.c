@@ -29,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 3.2  2003/09/18 02:44:54  cvs
+   Now printing decimal places for mode 32.
+
    Revision 3.1  2003/05/29 22:51:40  cvs
    Fixed bug in allocation of rcp[]: should be 2*nsamples long
    Fixed bug in detect power: should operate on outbuf[], not rcp[]
@@ -142,14 +145,24 @@ int main(int argc, char *argv[])
 
   /* open file input */
 #ifdef LARGEFILE
-  if((fdinput = open(infile, O_RDONLY|O_LARGEFILE)) < 0 )
+  if (infile[0] == '-')
+    fdinput=0;
+  else if((fdinput = open(infile, O_RDONLY|O_LARGEFILE)) < 0 )
     perror("open input file");
-  if((fdoutput = open(outfile, O_WRONLY|O_CREAT|O_LARGEFILE, 0644)) < 0 )
+
+  if (outfile[0] == '-')
+    fdoutput=1;
+  else if((fdoutput = open(outfile, O_WRONLY|O_CREAT|O_LARGEFILE, 0644)) < 0 )
     perror("open output file");
 #else
-  if((fdinput = open(infile, O_RDONLY)) < 0 )
+  if (infile[0] == '-')
+    fdinput=1;
+  else if((fdinput = open(infile, O_RDONLY)) < 0 )
     perror("open input file");
-  if((fdoutput = open(outfile, O_WRONLY|O_CREAT, 0644)) < 0 )
+
+  if (outfile[0] == '-')
+    fdoutput=1;
+  else if((fdoutput = open(outfile, O_WRONLY|O_CREAT, 0644)) < 0 )
     perror("open output file");
 #endif
 
@@ -367,7 +380,7 @@ double   *foff;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "m:c:o:adpf:x:"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-p (detect and output power)] [-o outfile] [infile] ";
+  char *USAGE1="pfs_unpack -m mode [-c channel (1 or 2)] [-d (detect and output magnitude)] [-p (detect and output power)] [-o outfile (- for stdout)] [infile (- for stdin)] ";
   char *USAGE2="For phase rotation, also specify [-f sampling frequency (MHz)] [-x desired frequency offset (Hz)] ";
   char *USAGE3="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
 
