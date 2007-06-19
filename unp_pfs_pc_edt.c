@@ -1,5 +1,8 @@
 #include "unpack.h"
 
+#define DBG1
+
+
 /******************************************************************************/
 /*	unpack_pfs_2c2b							      */
 /******************************************************************************/
@@ -113,13 +116,74 @@ void unpack_pfs_2c8b (unsigned char *buf, char *outbuf, int bufsize)
   /* connect BBC sin and cos to I and Q, respectively, for positive freq */
 
   int i;
+
+# ifdef DBG
+  unsigned char value1;
+  unsigned char value2;
+  unsigned char value3;
+  unsigned char value4;
   
+  value1 = buf[0];
+  value2 = buf[1];
+  value3 = buf[2];
+  value4 = buf[3];
+  printf ("**** TEST 3  %x %x %x %x \n", value1, value2, value3, value4);
+#endif
+
   for (i = 0; i < bufsize; i+=4)
   {
       *outbuf++ = (unsigned char) buf[i+0] - 128;
       *outbuf++ = (unsigned char) buf[i+1] - 128;
       *outbuf++ = (unsigned char) buf[i+2] - 128;
       *outbuf++ = (unsigned char) buf[i+3] - 128;
+  }
+
+  return;
+}
+
+/******************************************************************************/
+/*	unpack_pfs_2c8b_sb - 2's compliment data format                           */
+/******************************************************************************/
+void unpack_pfs_2c8b_sb (char *buf, char *outbuf, int bufsize)
+{
+  /*
+    unpacks 2-channel, 8-bit data from the portable fast sampler
+    input array buf is of size bufsize bytes
+    output array outbuf contains bufsize bytes
+    output array must have been allocated for at least bufsize*sizeof(char)
+  */
+
+  /* order is board 1 channel A, board 1 channel B */
+  /* with wiring of PFS, this corresponds to RCP-Q RCP-I */
+  /* connect BBC sin and cos to I and Q, respectively, for positive freq */
+
+  int i;
+  
+#ifdef DBG
+  char value1;
+  char value2;
+  char value3;
+  char value4;
+  
+  value1 = buf[0];
+  value2 = buf[1];
+  value3 = buf[2];
+  value4 = buf[3];
+  printf ("**** TEST 2  %d %d %d %d \n", value1, value2, value3, value4);
+#endif
+
+  for (i = 0; i < bufsize; i+=4)
+  {
+      *outbuf++ = buf[i+0];
+      *outbuf++ = buf[i+1];
+      *outbuf++ = buf[i+2];
+      *outbuf++ = buf[i+3];
+	  /* 
+      *outbuf++ = buf[i+2];
+      *outbuf++ = buf[i+3];
+      *outbuf++ = buf[i+0];
+      *outbuf++ = buf[i+1];
+	  */
   }
 
   return;
@@ -304,6 +368,70 @@ void unpack_pfs_4c2b_lcp (unsigned char *buf, char *lcp, int bufsize)
       *lcp++ = lookup[value & 0x0C];
   }
 
+  return;
+}
+
+
+/*
+  unpacks 4-channel, 8-bit data from the portable fast sampler
+  input array buf is of size bufsize bytes
+  output arrays rcp and lcp each contain bufsize bytes
+  rcp and lcp must each have storage for at least bufsize*sizeof(char)
+*/
+  
+/******************************************************************************/
+/*	unpack_pfs_4c8b_rcp			      */
+/******************************************************************************/
+void unpack_pfs_4c8b_rcp (unsigned char *buf, char *rcp, int bufsize)
+{
+  /* order is board 1 channel A, board 1 channel B */
+  /*          board 2 channel A, board 2 channel B */
+  /* with wiring of PFS, this corresponds to RCP-Q RCP-I LCP-Q LCP-I */
+
+  int i;
+  for (i = 0; i < bufsize; i += 4) {
+      *rcp++ = (unsigned char)buf[i] - 128;
+      *rcp++ = (unsigned char)buf[i+1] - 128;
+  }
+  return;
+}
+
+/******************************************************************************/
+/*	unpack_pfs_4c8b_lcp						      */
+/******************************************************************************/
+void unpack_pfs_4c8b_lcp (unsigned char *buf, char *lcp, int bufsize)
+{
+  int i;
+  for (i = 0; i < bufsize; i += 4) {
+      *lcp++ = (unsigned char)buf[i+2] - 128;
+      *lcp++ = (unsigned char)buf[i+3] - 128;
+  }
+  return;
+}
+
+/******************************************************************************/
+/*	unpack_pfs_4c8b_rcp_sb			      */
+/******************************************************************************/
+void unpack_pfs_4c8b_rcp_sb (unsigned char *buf, char *rcp, int bufsize)
+{
+  int i;
+  for (i = 0; i < bufsize; i += 4) {
+      *rcp++ = buf[i];
+      *rcp++ = buf[i+1];
+  }
+  return;
+}
+
+/******************************************************************************/
+/*	unpack_pfs_4c8b_lcp_sb						      */
+/******************************************************************************/
+void unpack_pfs_4c8b_lcp_sb (unsigned char *buf, char *lcp, int bufsize)
+{
+  int i;
+  for (i = 0; i < bufsize; i += 4) {
+      *lcp++ = buf[i+2];
+      *lcp++ = buf[i+3];
+  }
   return;
 }
 
