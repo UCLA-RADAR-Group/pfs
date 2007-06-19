@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 3.0  2003/02/25 22:10:43  cvs
+   Adapted to use Joseph Jao's byte unpacking.
+
    Revision 1.7  2002/05/01 05:29:33  cvs
    Fixed bug in handling of mode 3 (2c8b) histograms.
 
@@ -72,13 +75,12 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void iq_hist(char *inbuf, int nsamples, int levels);
-void iq_hist_8b(char *inbuf, int nsamples, int levels);
 
 int main(int argc, char *argv[])
 {
   struct stat filestat;	/* input file status structure */
   int mode;		/* data acquisition mode */
+  int twoscmp = 0;	/* 2's complement (0 = FALSE)  */
   int bufsize = 1048576;/* size of read buffer, default 1 MB */
   char *buffer;		/* buffer for packed data */
   char *rcp,*lcp;	/* buffer for unpacked data */
@@ -88,10 +90,17 @@ int main(int argc, char *argv[])
   int open_flags;	/* flags required for open() call */
   int parse_all;
   int parse_end;
+  long long r_ihist[512], r_qhist[512];
+  long long l_ihist[512], l_qhist[512];
   int i;
 
+  /* initialization */
+  for (i = 0; i < 512; i++) {
+    r_ihist[i] = 0; r_qhist[i] = 0; l_ihist[i] = 0; l_qhist[i] = 0;
+  }
+
   /* get the command line arguments and open the files */
-  processargs(argc,argv,&infile,&outfile,&mode,&parse_all,&parse_end);
+  processargs(argc,argv,&infile,&outfile,&mode,&twoscmp,&parse_all,&parse_end);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -130,6 +139,7 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; levels = 256; break; 
     case  5: smpwd = 4; levels =   4; break;
     case  6: smpwd = 2; levels =  16; break;
+    case  7: smpwd = 1; levels = 256; break;
     case  8: smpwd = 2; levels = 256; break; 
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
@@ -149,134 +159,156 @@ int main(int argc, char *argv[])
     lseek(fdinput, -bufsize, SEEK_END);
 
   /* read first buffer */
-  if (bufsize != read(fdinput, buffer, bufsize))
-    {
+  do {
+    if (bufsize != read(fdinput, buffer, bufsize)) {
       fprintf(stderr,"Read error\n");
-      exit(1);
+      break;
     }  
 
-  switch (mode)
-    { 
-    case 1:
-      unpack_pfs_2c2b(buffer, rcp, bufsize);
-      iq_hist(rcp, nsamples, levels);
-      break;
-    case 2: 
-      unpack_pfs_2c4b(buffer, rcp, bufsize);
-      iq_hist(rcp, nsamples, levels);
-      break;
-    case 3: 
-      unpack_pfs_2c8b(buffer, rcp, bufsize);
-      iq_hist_8b(rcp, nsamples, levels);
-      break;
-    case 5:
-      unpack_pfs_4c2b_rcp(buffer, rcp, bufsize);
-      unpack_pfs_4c2b_lcp(buffer, lcp, bufsize);
+    switch (mode) { 
+      case 1:
+        /* unpack & compute histogram */
+        unpack_pfs_2c2b(buffer, rcp, bufsize);
+      
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels - 1] += 1; 
+          r_qhist[(int)rcp[i+1] + levels - 1] += 1; 
+        }
 
-      fprintf(fpoutput,"RCP hist\n");
-      iq_hist(rcp, nsamples, levels);
-      fprintf(fpoutput,"LCP hist\n");
-      iq_hist(lcp, nsamples, levels);
-      break;
-    case 6:
-      unpack_pfs_4c4b_rcp(buffer, rcp, bufsize);
-      unpack_pfs_4c4b_lcp(buffer, lcp, bufsize);
+        break;
+      case 2: 
+        /* unpack & compute histogram */
+        unpack_pfs_2c4b(buffer, rcp, bufsize);
 
-      fprintf(fpoutput,"RCP hist\n");
-      iq_hist(rcp, nsamples, levels);
-      fprintf(fpoutput,"LCP hist\n");
-      iq_hist(lcp, nsamples, levels);
-      break;
-    case 8: 
-      iq_hist_8b(buffer, nsamples, levels);
-      break;
-    default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels - 1] += 1; 
+          r_qhist[(int)rcp[i+1] + levels - 1] += 1; 
+        }
+
+        break;
+      case 3: 
+        /* unpack & compute histogram */
+        if (!twoscmp) {
+          unpack_pfs_2c8b(buffer, rcp, bufsize);
+        } else {
+          unpack_pfs_2c8b_sb(buffer, rcp, bufsize);
+        }
+
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels/2] += 1; 
+          r_qhist[(int)rcp[i+1] + levels/2] += 1; 
+        }
+
+        break;
+      case 5:
+        /* unpack & compute histogram */
+        unpack_pfs_4c2b_rcp(buffer, rcp, bufsize);
+        unpack_pfs_4c2b_lcp(buffer, lcp, bufsize);
+
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels - 1] += 1; 
+          r_qhist[(int)rcp[i+1] + levels - 1] += 1; 
+
+          l_ihist[(int)lcp[i]   + levels - 1] += 1; 
+          l_qhist[(int)lcp[i+1] + levels - 1] += 1; 
+        }
+
+        break;
+      case 6:
+        /* unpack & compute histogram */
+        unpack_pfs_4c4b_rcp(buffer, rcp, bufsize);
+        unpack_pfs_4c4b_lcp(buffer, lcp, bufsize);
+
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels - 1] += 1; 
+          r_qhist[(int)rcp[i+1] + levels - 1] += 1; 
+
+          l_ihist[(int)lcp[i]   + levels - 1] += 1; 
+          l_qhist[(int)lcp[i+1] + levels - 1] += 1; 
+        }
+
+        break;
+      case 7: 
+        /* unpack & compute histogram */
+        if (!twoscmp) {
+          unpack_pfs_4c8b_rcp(buffer, rcp, bufsize);
+          unpack_pfs_4c8b_lcp(buffer, lcp, bufsize);
+        } else {
+          unpack_pfs_4c8b_rcp_sb(buffer, rcp, bufsize);
+          unpack_pfs_4c8b_lcp_sb(buffer, lcp, bufsize);
+        }
+
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)rcp[i]   + levels/2] += 1; 
+          r_qhist[(int)rcp[i+1] + levels/2] += 1; 
+
+          l_ihist[(int)lcp[i]   + levels/2] += 1; 
+          l_qhist[(int)lcp[i+1] + levels/2] += 1; 
+        }
+
+        break;
+      case 8: 
+        for (i = 0; i < 2*nsamples; i += 2) {
+          r_ihist[(int)buffer[i]   + levels/2] += 1; 
+          r_qhist[(int)buffer[i+1] + levels/2] += 1; 
+        }
+        
+        break;
+      default: fprintf(stderr,"mode not implemented yet\n"); exit(1);
     }
-  
+  } while (parse_all);
+
+
+  /* print results */
+  // mode 3 or 7 changes 256 -> 128 level for easy of display
+  if (mode == 3 || mode == 8 || mode == 7) {  
+      fprintf(fpoutput,"RCP hist\n");
+ 
+      for (i = 0; i < levels; i ++) {
+        fprintf(fpoutput,"%10d %15qd \t",i - levels/2,r_ihist[i]);
+        fprintf(fpoutput,"%10d %15qd \n",i - levels/2,r_qhist[i]);
+      }
+
+      if (mode == 7) {     
+        fprintf(fpoutput,"LCP hist\n");
+ 
+        for (i = 0; i < levels; i ++) {
+          fprintf(fpoutput,"%10d %15qd \t",i - levels/2,l_ihist[i]);
+          fprintf(fpoutput,"%10d %15qd \n",i - levels/2,l_qhist[i]);
+        }
+      }
+  } else {
+      fprintf(fpoutput,"RCP hist\n");
+ 
+      for (i = 0; i < 2 * levels; i += 2) {
+        fprintf(fpoutput,"%10d %15qd \t",i - levels + 1,r_ihist[i]);
+        fprintf(fpoutput,"%10d %15qd \n",i - levels + 1,r_qhist[i]);
+      }
+
+      if (mode > 4) {
+        fprintf(fpoutput,"LCP hist\n");
+ 
+        for (i = 0; i < 2 * levels; i += 2) {
+          fprintf(fpoutput,"%10d %15qd \t",i - levels + 1,l_ihist[i]);
+          fprintf(fpoutput,"%10d %15qd \n",i - levels + 1,l_qhist[i]);
+        }
+      }
+  }
+
   return 0;
 }
 
-/******************************************************************************/
-/*	iq_hist						         	      */
-/******************************************************************************/
-void iq_hist(char *inbuf, int nsamples, int levels)
-{
-  double i=0;
-  double q=0;
-
-  int ihist[2*levels];
-  int qhist[2*levels];
-
-  int k;
-
-  /* initialize */  
-  for (k = 0; k < 2 * levels; k += 2)
-    ihist[k] = qhist[k] = 0;
-
-  /* compute histogram */
-  for (k = 0; k < 2*nsamples; k += 2)
-    {
-      ihist[(int)inbuf[k]   + levels - 1] += 1; 
-      qhist[(int)inbuf[k+1] + levels - 1] += 1; 
-    }
-
-  /* print results */
-  for (k = 0; k < 2 * levels; k += 2)
-    {
-      fprintf(fpoutput,"%10d %15d",k - levels + 1,ihist[k]);
-      fprintf(fpoutput,"\t"); 
-      fprintf(fpoutput,"%10d %15d",k - levels + 1,qhist[k]);
-      fprintf(fpoutput,"\n"); 
-    }
-
-  return;
-}    
-
-/******************************************************************************/
-/*	iq_hist_8b					         	      */
-/******************************************************************************/
-void iq_hist_8b(char *inbuf, int nsamples, int levels)
-{
-  double i=0;
-  double q=0;
-
-  int ihist[levels];
-  int qhist[levels];
-
-  int k;
-
-  /* initialize */  
-  for (k = 0; k < levels; k++)
-    ihist[k] = qhist[k] = 0;
-
-  /* compute histogram */
-  for (k = 0; k < 2*nsamples; k += 2)
-    {
-      ihist[(int)inbuf[k]   + levels/2] += 1; 
-      qhist[(int)inbuf[k+1] + levels/2] += 1; 
-    }
-
-  /* print results */
-  for (k = 0; k < levels; k ++)
-    {
-      fprintf(fpoutput,"%10d %15d",k - levels/2,ihist[k]);
-      fprintf(fpoutput,"\t"); 
-      fprintf(fpoutput,"%10d %15d",k - levels/2,qhist[k]);
-      fprintf(fpoutput,"\n"); 
-    }
-
-  return;
-}    
 
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,parse_all,parse_end)
+void	processargs(argc,argv,infile,outfile,mode,twoscmp,parse_all,parse_end)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
 char	**outfile;		 /* output file name */
 int     *mode;
+int     *twoscmp;
 int     *parse_all;
 int     *parse_end;
 {
@@ -291,8 +323,8 @@ int     *parse_end;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:ae"; 	 /* options to search for :=> argument*/
-  char *USAGE1="pfs_hist -m mode [-e (parse data at eof)] [-a (parse all data)] [-o outfile] [infile] ";
+  char *myoptions = "m:o:ae2"; 	 /* options to search for :=> argument*/
+  char *USAGE1="pfs_hist -m mode [-2 (2's complement)] [-e (parse data at eof)] [-a (parse all data)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -303,6 +335,7 @@ int     *parse_end;
   *outfile = "-";
 
   *mode  = 0;                /* default value */
+  *twoscmp  = 0;             /* default value */
   *parse_all = 0;
   *parse_end = 0;
 
@@ -319,6 +352,11 @@ int     *parse_end;
       case 'm':
  	       sscanf(optarg,"%d",mode);
                arg_count += 2;		/* two command line arguments */
+	       break;
+	    
+      case '2':
+ 	       *twoscmp = 1;
+               arg_count ++;		/* one command line arguments */
 	       break;
 	    
       case 'a':
@@ -343,12 +381,11 @@ int     *parse_end;
   /* must specify a valid mode */
   if (*mode == 0) goto errout;
   
-  /* code still in development */
-  if (*parse_all)
-    {
-      fprintf(stderr,"-a option not implemented yet\n"); 
-      exit(1);
-    }
+  if (*twoscmp && *mode != 3 && *mode != 7) {
+    fprintf(stderr,"2's complement is supported on mode 3 & 7 only\n"); 
+    goto errout;
+  }
+
   return;
 
   /* here if illegal option or argument */
