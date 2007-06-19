@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.7  2007/06/14 17:10:01  jlm
+   Added option to apply Hanning window.
+
    Revision 3.6  2006/09/16 22:08:28  jlm
    Added -b option for output in binary format.  Previously the -t option
    was used to get a similar output, but with more restrictions.
@@ -132,7 +135,7 @@ int  no_comma_in_string();
 int main(int argc, char *argv[])
 {
   int mode;
-  int bufsize;		/* size of read buffer */
+  long bufsize;		/* size of read buffer */
   char *buffer;		/* buffer for packed data */
   char *rcp;		/* buffer for unpacked data */
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
@@ -154,7 +157,7 @@ int main(int argc, char *argv[])
   double var = 0;	/* needed for rms computation */
   double sigma = 1;	/* needed for rms computation */
   int downsample;	/* downsampling factor, dimensionless */
-  int sum;		/* number of transforms to add, dimensionless */
+  long long sum;	/* number of transforms to add, dimensionless */
   int timeseries;	/* process as time series, boolean */
   int dB;		/* write out results in dB */
   int fftlen;		/* transform length, complex samples */
@@ -219,8 +222,8 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Processed bandwidth            : %e Hz\n\n",freqres*fftlen);
 
   fprintf(stderr,"Data required for one transform: %d bytes\n",bufsize);
-  fprintf(stderr,"Number of transforms to add    : %d\n",sum);
-  fprintf(stderr,"Data required for one sum      : %d bytes\n",sum * bufsize);
+  fprintf(stderr,"Number of transforms to add    : %qd\n",sum);
+  fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
   fprintf(stderr,"\n");
     
@@ -409,7 +412,7 @@ int     *mode;
 double   *fsamp;
 double   *freqres;
 int     *downsample;
-int     *sum;
+long long     *sum;
 int     *binary;
 int     *timeseries;
 int     *chan;
@@ -490,7 +493,7 @@ int     *window;
 	break;
 	
       case 'n':
-	sscanf(optarg,"%d",sum);
+	sscanf(optarg,"%qd",sum);
 	arg_count += 2;
 	break;
 
