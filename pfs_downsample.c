@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 3.13  2007/06/14 21:33:27  jlm
+   Clarified comment about end of loop condition with -a option.
+
    Revision 3.12  2007/06/14 20:42:05  jlm
    Introduced wordstoskip to continue straightening out wordstoskip situation.
 
@@ -113,7 +116,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -130,7 +137,8 @@ int	fdoutput;		/* file descriptor to output file */
 char	command_line[200];	/* command line assembled by processargs */
 char	header[40];		/* data file name header */
 int	ext;			/* data file extension */
-int	open_flags;	/* flags required for open() call */
+int	open_rflags;	/* flags required for open() call for reading */
+int	open_wflags;	/* flags required for open() call for writing */
 struct  stat filestat;	/* input file status structure */
 int	verbose = 1;    /* verbosity level */
 int     clipping = 0;	/* flag for detection and reporting of clipping */
@@ -205,14 +213,14 @@ int main(int argc, char *argv[])
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
-  /* open file input */
+  /* open input file */
 #ifdef LARGEFILE
-  open_flags = O_RDONLY|O_LARGEFILE;
+  open_rflags = O_RDONLY|O_LARGEFILE;
 #else
-  open_flags = O_RDONLY;
+  open_rflags = O_RDONLY;
 #endif
 
-  if((fdinput = open(infile, open_flags)) < 0 )
+  if((fdinput = open(infile, open_rflags)) < 0 )
     {
       perror("open input file");
       exit(1);
@@ -265,9 +273,15 @@ int main(int argc, char *argv[])
   }
 
   /* open output file, stdout is default */
+#ifdef LARGEFILE
+  open_wflags = O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE;
+#else
+  open_wflags = O_RDWR | O_CREAT | O_TRUNC;
+#endif
+
   if (outfile[0] == '-') {
      fdoutput=1;
-  } else if ((fdoutput = open(outfile, O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE, 0660)) < 0 )
+  } else if ((fdoutput = open(outfile, open_wflags, 0660)) < 0 )
   {
      perror("open input file");
      exit(1);
@@ -443,7 +457,7 @@ void *read_buf (void *rdata) {
 	/* the program must stop after reading the file with the highest extension */
 	/* we assume that if the file with the next extension does not exist, 
 	   we have reached the end */
-	if ((fdinput = open(infile, open_flags)) < 0) {
+	if ((fdinput = open(infile, open_rflags)) < 0) {
 	    return;
 	} else if (fstat (fdinput, &filestat) < 0) {
 	    perror("fstat");
