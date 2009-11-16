@@ -22,6 +22,9 @@
 
 /* 
    $Log$
+   Revision 3.1  2007/06/19 17:00:21  jao
+   Implemented '-a' option, mode 7 (4c8b) historgram, and 2's complemnt for mode 3 & 7
+
    Revision 3.0  2003/02/25 22:10:43  cvs
    Adapted to use Joseph Jao's byte unpacking.
 
@@ -52,7 +55,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>

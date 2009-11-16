@@ -29,6 +29,9 @@
 
 /* 
    $Log$
+   Revision 3.3  2007/06/18 20:50:06  jao
+   Added option '-o -' & '-' for piping out/in to/from STDOUT & STDIN
+
    Revision 3.2  2003/09/18 02:44:54  cvs
    Now printing decimal places for mode 32.
 
@@ -90,7 +93,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 #include "unpack.h"
