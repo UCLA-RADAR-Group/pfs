@@ -27,8 +27,7 @@ DESTLIB = $(DEST)/lib
 # Please do not change anything below this line
 LIBDIR  = ../../lib
 INCDIR  = ../../include
-#CFLAGS  = -I$(INCDIR) -O6 -DFFTW -DLARGEFILE -D_FILE_OFFSET_BITS=64
-CFLAGS  = -I$(INCDIR) -O6 -DFFTW -DMAC
+CFLAGS  = -I$(INCDIR) -O6 -DFFTW -DLARGEFILE -D_FILE_OFFSET_BITS=64
 FFLAGS  = -I$(INCDIR)
 LDFLAGS = -L../../lib -lm
 BZFLAGS = -fno-second-underscore
