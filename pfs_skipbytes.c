@@ -25,6 +25,10 @@
 
 /* 
    $Log$
+   Revision 1.6  2003/11/05 23:27:02  cvs
+   Now using lseek() to skip unwanted bytes.
+   Changed test on read() statement.
+
    Revision 1.5  2003/07/03 18:38:59  cvs
    Fixed bug that allowed writing of incomplete buffers at EOF.
 
@@ -47,7 +51,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 
 /* revision control variable */
 static char const rcsid[] = 

@@ -30,6 +30,9 @@
 
 /* 
    $Log$
+   Revision 1.6  2002/04/27 20:25:31  margot
+   Changed location of include file for O_LARGEFILE
+
    Revision 1.5  2002/04/27 06:10:57  margot
    Added -i option.
 
@@ -52,7 +55,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include "unpack.h"
 #include <fftw.h>
 

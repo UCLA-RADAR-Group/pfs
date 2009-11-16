@@ -23,6 +23,9 @@
 
 /* 
    $Log$
+   Revision 3.1  2003/02/26 00:42:59  margot
+   Fixed first argument to floatsum()
+
    Revision 3.0  2003/02/25 22:40:14  cvs
    Adapted to use Joseph Jao's byte unpacking.
 
@@ -66,7 +69,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include <sys/stat.h>
 #include "unpack.h"
 
