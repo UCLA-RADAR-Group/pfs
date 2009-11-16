@@ -8,11 +8,13 @@
 include Makefile.inc
 #
 #
-PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
-OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
+DTPROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
+OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
+DTOBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
 #
 #
-all: $(PROGRAMS)
+all: $(PROGRAMS) $(DTPROGRAMS)
 #
 #
 # pfs_radar acquires data from the portable fast sampler
@@ -117,7 +119,7 @@ pfs_skipbytes : pfs_skipbytes.o
 pfs_radar.o:	 pfs_radar.c ;	   $(CC) $(CFLAGS) -c pfs_radar.c -I/opt/EDTpcd
 pfs_sample.o:	 pfs_sample.c ;	   $(CC) $(CFLAGS) -c pfs_sample.c -I/opt/EDTpcd
 pfs_trigger.o:	 pfs_trigger.c ;   $(CC) $(CFLAGS) -c pfs_trigger.c -I/opt/EDTpcd
-pfs_reset.o:	 pfs_reset.c ;   $(CC) $(CFLAGS) -c pfs_reset.c -I/opt/EDTpcd
+pfs_reset.o:	 pfs_reset.c ;     $(CC) $(CFLAGS) -c pfs_reset.c -I/opt/EDTpcd
 pfs_levels.o:	 pfs_levels.c ;	   $(CC) $(CFLAGS) -c pfs_levels.c -I/opt/EDTpcd
 pfs_hist.o:	 pfs_hist.c ;	   $(CC) $(CFLAGS) -c pfs_hist.c 
 pfs_stats.o:	 pfs_stats.c ;	   $(CC) $(CFLAGS) -c pfs_stats.c 
@@ -132,11 +134,15 @@ libunpack.o:     unp_pfs_pc_edt.c; $(CC) $(CFLAGS) -c unp_pfs_pc_edt.c -o libunp
 #
 #
 clean:
-	/bin/rm -f a.out core $(OBJECTS) $(PROGRAMS) $(LIBOBJECTS) *~ \#*
+	/bin/rm -f a.out core $(OBJECTS) $(PROGRAMS) $(DTOBJECTS) $(DTPROGRAMS) $(LIBOBJECTS) *~ \#*
 #
-install: $(PROGRAMS)
+install: $(PROGRAMS) $(DTPROGRAMS)
 	@echo 'Installing programs : $(PROGRAMS)'
 	@for f in $(PROGRAMS); \
+	do install $$f $(DESTDIR)/$$f; \
+	done;
+	@echo 'Installing programs : $(DTPROGRAMS)'
+	@for f in $(DTPROGRAMS); \
 	do install $$f $(DESTDIR)/$$f; \
 	done;
 #
