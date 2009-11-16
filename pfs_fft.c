@@ -39,6 +39,9 @@
 
 /* 
    $Log$
+   Revision 3.8  2007/06/19 15:43:15  jao
+   Increase dynamic range for parameters bufsize and sum
+
    Revision 3.7  2007/06/14 17:10:01  jlm
    Added option to apply Hanning window.
 
@@ -105,7 +108,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef MAC
+#include <fcntl.h>
+#else
 #include <asm/fcntl.h>
+#endif
 #include <unistd.h>
 #include "unpack.h"
 #include <fftw.h>
