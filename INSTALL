@@ -22,16 +22,16 @@ system if needed.
 
 Specify the path to the software repository:
 
-% export CVSROOT=:pserver:pfs@planets.astro.cornell.edu:/home/cvsroot
+% export CVSROOT=:pserver:pfs@mel.ess.ucla.edu:/data/cvsroot
 OR
-% setenv CVSROOT :pserver:pfs@planets.astro.cornell.edu:/home/cvsroot
+% setenv CVSROOT :pserver:pfs@mel.ess.ucla.edu:/data/cvsroot
 
 Login with the PFS password.
 
 % cvs login
 
 You should only have to do this once.  If you don't know the password, 
-call 607 255 1810 and an operator will assist you.
+call 310 206 8345 and an operator will assist you.
 
 Then use the CVS check-out command (co) to download the software:
 
@@ -55,9 +55,10 @@ Compile the pfs software:
 % cd ..
 
 If compilation fails and you believe you followed instructions, 
-please send a bug report to jlm@astro.cornell.edu.  
+please send a bug report to jlm@ess.ucla.edu.  
 You may have to edit Makefile.inc if your setup is non-standard.
 You may have to compile the EDT library if you have not done so.
+Mac-friendly versions of the Makefile and Makefile.inc are included.
 
 Compile the radardecode software:
 
@@ -74,10 +75,12 @@ You can keep your PFS software current by periodically running:
 
 Please send comments and bug reports to:
 
-Jean-Luc Margot
-Department of Astronomy
-Cornell University
-304 Space Sciences Bldg
-Ithaca, NY 14853
-607 255 1810 
-jlm@astro.cornell.edu
+Jean-Luc Margot 
+Associate Professor 
+UCLA Earth & Space Sciences and
+Institute of Geophysics and Planetary Physics
+595 Charles Young Drive East 
+Los Angeles, CA 90095 
+(310) 206 8345 
+jlm@ess.ucla.edu
+http://www2.ess.ucla.edu/~jlm 
