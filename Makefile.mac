@@ -5,7 +5,7 @@
 #       It is not included in the distribution so that you don't overwrite
 #       your local settings when doing a software upgrade
 #
-include Makefile.inc
+include Makefile.mac.inc
 #
 #
 PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
@@ -139,10 +139,6 @@ clean:
 install: $(PROGRAMS) 
 	@echo 'Installing programs : $(PROGRAMS)'
 	@for f in $(PROGRAMS); \
-	do install $$f $(DESTDIR)/$$f; \
-	done;
-	@echo 'Installing programs : $(DTPROGRAMS)'
-	@for f in $(DTPROGRAMS); \
 	do install $$f $(DESTDIR)/$$f; \
 	done;
 #
