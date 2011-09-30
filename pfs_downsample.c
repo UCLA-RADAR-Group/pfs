@@ -28,6 +28,13 @@
 
 /* 
    $Log$
+   Revision 1.1  2011/09/30 19:03:00  jlm
+   Initial revision
+
+   Revision 3.14  2009/11/16 19:11:21  jlm
+   Added ifdef flag for Mac compilation.
+   Better treatment of open() flags for ifdef LARGEFILE situation.
+
    Revision 3.13  2007/06/14 21:33:27  jlm
    Clarified comment about end of loop condition with -a option.
 
@@ -672,7 +679,7 @@ int 	*samplestoskip;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:o:d:c:s:I:Q:b:f:axq"; 	 /* options to search for :=> argument*/
+  char *myoptions = "m:o:d:c:s:I:Q:b:f:axqi"; 	 /* options to search for :=> argument*/
   char *USAGE1="pfs_downsample -m mode -d downsampling factor [-s number of complex samples to skip] [-f scale fudge factor] [-b output byte quantities (default floats)] [-a downsample all data files] [-I dcoffi] [-Q dcoffq] [-c channel (1 or 2)] [-i (swap I/Q)] [-q (quiet mode)] [-o outfile] [infile] ";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
