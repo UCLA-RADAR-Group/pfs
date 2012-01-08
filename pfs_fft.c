@@ -11,10 +11,14 @@
 *              [-d downsampling factor] 
 *              [-n sum n transforms] 
 *              [-l (dB output)]
+*              [-b (binary output)]
 *              [-t time series] 
 *              [-x freqmin,freqmax (Hz)]
 *              [-s scale to sigmas using smin,smax (Hz)]
 *              [-c channel] 
+*              [-i swap IQ before transform (invert freq axis)]
+*              [-w apply Hanning window before transform]
+*              [-S number of seconds to skip before applying first FFT]
 *              [-o outfile] [infile]
 *
 *  input:
@@ -39,6 +43,9 @@
 
 /* 
    $Log$
+   Revision 3.9  2009/11/16 19:09:36  jlm
+   Added ifdef flag for Mac compilation
+
    Revision 3.8  2007/06/19 15:43:15  jao
    Increase dynamic range for parameters bufsize and sum
 
@@ -175,13 +182,15 @@ int main(int argc, char *argv[])
   int window;		/* apply Hanning window before fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
+  int nskipseconds;     /* optional number of seconds to skip at beginning of file */
+  int nskipbytes;	/* number of bytes to skip at beginning of file */
 
   fftw_plan p;
   int i,j,k,l,n;
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&window);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&window,&nskipseconds);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -232,8 +241,23 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Number of transforms to add    : %qd\n",sum);
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
+
+  if (nskipseconds != 0)
+    {
+      nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
+      fprintf(stderr,"Skipping from BOF              : %qd seconds\n",nskipseconds);
+      fprintf(stderr,"Skipping from BOF              : %qd bytes\n",nskipbytes);
+    }
   fprintf(stderr,"\n");
     
+  /* skip unwanted bytes */
+  /* fsamp samples per second during nskipseconds, and 4/smpwd bytes per complex sample */
+  if (nskipbytes != lseek(fdinput, nskipbytes, SEEK_SET))
+    {
+      fprintf(stderr,"Read error while skipping %d bytes.  Check file size.\n",nskipbytes);
+      exit(1);
+    }
+
   /* allocate storage */
   nsamples = bufsize * smpwd / 4;
   buffer    = (char *)  malloc(bufsize);
@@ -378,7 +402,7 @@ int main(int argc, char *argv[])
 	    if (binary)
 	      fwrite(&value,sizeof(float),1,fpoutput);
 	    else
-	      fprintf(fpoutput,"% .3f % .3f\n",freq,value);  
+	      fprintf(fpoutput,"% .3f % .3e\n",freq,value);  
 	  }
       }
   
@@ -410,7 +434,7 @@ void vector_window(float *data, int len)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,window)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,window,nskipseconds)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -430,6 +454,7 @@ float   *rmsmax;
 int     *dB;
 int     *invert;
 int     *window;
+int     *nskipseconds;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -442,8 +467,8 @@ int     *window;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iw"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iwS:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -464,6 +489,7 @@ int     *window;
   *dB = 0;		/* default is linear output */
   *invert = 0;
   *window = 0;
+  *nskipseconds = 0;    /* default is process entire file */
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
   *rmsmin  = 0;		/* not set value */
@@ -506,6 +532,11 @@ int     *window;
 
       case 'c':
 	sscanf(optarg,"%d",chan);
+	arg_count += 2;
+	break;
+	
+      case 'S':
+	sscanf(optarg,"%d",nskipseconds);
 	arg_count += 2;
 	break;
 	
