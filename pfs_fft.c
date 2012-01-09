@@ -43,6 +43,9 @@
 
 /* 
    $Log$
+   Revision 3.10  2012/01/08 23:56:09  jlm
+   Added -S option to allow skipping data at beginning of file.
+
    Revision 3.9  2009/11/16 19:09:36  jlm
    Added ifdef flag for Mac compilation
 
@@ -242,9 +245,9 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
 
+  nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
   if (nskipseconds != 0)
     {
-      nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
       fprintf(stderr,"Skipping from BOF              : %qd seconds\n",nskipseconds);
       fprintf(stderr,"Skipping from BOF              : %qd bytes\n",nskipbytes);
     }
