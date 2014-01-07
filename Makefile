@@ -136,15 +136,18 @@ libunpack.o:     unp_pfs_pc_edt.c; $(CC) $(CFLAGS) -c unp_pfs_pc_edt.c -o libunp
 clean:
 	/bin/rm -f a.out core $(OBJECTS) $(PROGRAMS) $(DTOBJECTS) $(DTPROGRAMS) $(LIBOBJECTS) *~ \#*
 #
-install: $(PROGRAMS) $(DTPROGRAMS)
+install: $(PROGRAMS) 
 	@echo 'Installing programs : $(PROGRAMS)'
 	@for f in $(PROGRAMS); \
 	do install $$f $(DESTDIR)/$$f; \
 	done;
+
+dtinstall: $(DTPROGRAMS)
 	@echo 'Installing programs : $(DTPROGRAMS)'
 	@for f in $(DTPROGRAMS); \
 	do install $$f $(DESTDIR)/$$f; \
 	done;
+
 #
 distrib:
 	tar cvf distrib.tar Makefile multifile.c multifile.h unpack.h unp_pfs_pc_edt.c pfs_radar.c pfs_sample.c pfs_trigger.c pfs_reset.c pfs_levels.c pfs_hist.c pfs_stats.c pfs_unpack.c pfs_downsample.c pfs_fft.c pfs_dehop.c pfs_skipbytes.c

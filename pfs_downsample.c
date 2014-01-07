@@ -28,6 +28,9 @@
 
 /* 
    $Log$
+   Revision 3.15  2011/09/30 18:59:38  jlm
+   Fixed non-functional '-i' option introduced in 3.7.
+
    Revision 1.1  2011/09/30 19:03:00  jlm
    Initial revision
 
@@ -309,7 +312,8 @@ int main(int argc, char *argv[])
 
   /* compute buffer size */
   /* we need a multiple of the downsampling factor, or order 1 MB */
-  bufsize = (int) rint(1000000.0/downsample) * downsample;
+  /* make it 4 MB as we were getting warnings when downsampling by 16 */
+  bufsize = (int) rint(1000000.0/downsample) * downsample * 4;
   /* but the buffer size must be smaller than the file size */
   if (bufsize > (filestat.st_size - (int) bytestoskip)) 
     {
