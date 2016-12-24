@@ -43,6 +43,9 @@
 
 /* 
    $Log$
+   Revision 3.11  2012/01/09 00:32:32  jlm
+   Fixed uninitialized nskipbytes when nskipseconds = 0.
+
    Revision 3.10  2012/01/08 23:56:09  jlm
    Added -S option to allow skipping data at beginning of file.
 
@@ -137,7 +140,7 @@ int	fdinput;		/* file descriptor for input file */
 char   *outfile;		/* output file name */
 char   *infile;		        /* input file name */
 
-char	command_line[200];	/* command line assembled by processargs */
+char	command_line[512];	/* command line assembled by processargs */
 
 void processargs();
 void open_file();
@@ -170,9 +173,9 @@ int main(int argc, char *argv[])
   float rmsmax;		/* max frequency for rms calculation */
   double fsamp;		/* sampling frequency, MHz */
   double freqres;	/* frequency resolution, Hz */
-  double mean = 0;	/* needed for rms computation */
-  double var = 0;	/* needed for rms computation */
-  double sigma = 1;	/* needed for rms computation */
+  double mean,mean1;	/* needed for rms computation */
+  double var,var1;	/* needed for rms computation */
+  double sigma,sigma1;	/* needed for rms computation */
   int downsample;	/* downsampling factor, dimensionless */
   long long sum;	/* number of transforms to add, dimensionless */
   int timeseries;	/* process as time series, boolean */
@@ -187,9 +190,10 @@ int main(int argc, char *argv[])
   int binary;		/* write output as binary floating point quantities */
   int nskipseconds;     /* optional number of seconds to skip at beginning of file */
   int nskipbytes;	/* number of bytes to skip at beginning of file */
-
+  int imin,imax;	/* indices for rms calculation */
+  
   fftw_plan p;
-  int i,j,k,l,n;
+  int i,j,k,l,n,n1;
   short x;
 
   /* get the command line arguments */
@@ -235,16 +239,19 @@ int main(int argc, char *argv[])
   /* compute fft plan and allocate storage */
   p = fftw_create_plan(fftlen, FFTW_FORWARD, FFTW_ESTIMATE);
 
+  /* describe what we are doing */
   fprintf(stderr,"\n%s\n\n",command_line);
   fprintf(stderr,"FFT length                     : %d\n",fftlen);
   fprintf(stderr,"Frequency resolution           : %e Hz\n",freqres);
-  fprintf(stderr,"Processed bandwidth            : %e Hz\n\n",freqres*fftlen);
+  fprintf(stderr,"Processed bandwidth            : %e Hz\n",freqres*fftlen);
+  if (rmsmin != 0 || rmsmax != 0)
+    fprintf(stderr,"Scaling to rms power between   : [%e,%e] Hz\n\n",rmsmin,rmsmax);
 
   fprintf(stderr,"Data required for one transform: %d bytes\n",bufsize);
   fprintf(stderr,"Number of transforms to add    : %qd\n",sum);
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
-
+  
   nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
   if (nskipseconds != 0)
     {
@@ -259,6 +266,16 @@ int main(int argc, char *argv[])
     {
       fprintf(stderr,"Read error while skipping %d bytes.  Check file size.\n",nskipbytes);
       exit(1);
+    }
+
+  /* verify that scaling request is sensible */
+  if (rmsmin != 0 || rmsmax != 0)
+    {
+      if (rmsmin > rmsmax || rmsmin < -freqres*fftlen/2 || rmsmax > freqres*fftlen/2)
+	{
+	  fprintf(stderr,"Problem with -s parameters\n");
+	  exit(1);
+	}
     }
 
   /* allocate storage */
@@ -357,26 +374,43 @@ int main(int argc, char *argv[])
   total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2; 
   
   /* compute rms if needed */
+  mean = 0;
+  sigma = 1;
   if (rmsmin != 0 || rmsmax != 0)
     {
+      /* identify relevant indices for rms power computation */
+      imin = fftlen/2 + rmsmin/freqres; 
+      imax = fftlen/2 + rmsmax/freqres; 
+      mean1 = var1 = 0;
+      n1 = 0;
+      for (i = imin; i < imax; i++)
+	{
+	  mean1 += total[i];
+	  var1  += total[i] * total[i];
+	  n1++;
+	}
+      mean1  = mean1 / n1;
+      var1   = var1 / n1;
+      sigma1 = sqrt(var1 - mean1 * mean1);
+
+      /* now redo calculation but exclude 5-sigma outliers */
       mean = var = 0;
       n = 0;
-      /* this would be cool except that we never check the bounds */
-      /* imin = fftlen/2 + rmsmin/freqres; */
-      /* imax = fftlen/2 + rmsmax/freqres; */
-      for (i = 0; i < fftlen; i++)
+      for (i = imin; i < imax; i++)
 	{
-	  freq = (i-fftlen/2)*freqres;
-	  if (freq >= rmsmin && freq <= rmsmax)
-	    {
-	      mean += total[i];
-	      var  += total[i] * total[i];
-	      n++;
-	    } 
+	  if (fabs((total[i] - mean1)/sigma1) > 5)
+	    continue;
+	  mean += total[i];
+	  var  += total[i] * total[i];
+	  n++;
 	}
       mean  = mean / n;
       var   = var / n;
       sigma = sqrt(var - mean * mean);
+      /*
+      fprintf(stderr,"Computed mean,sigma with    %d outliers : %e +/- %e s\n",(n1-n),mean1,sigma1);
+      fprintf(stderr,"Computed mean,sigma without %d outliers : %e +/- %e s\n",(n1-n),mean,sigma);
+      */
     }
   
   /* write output */
