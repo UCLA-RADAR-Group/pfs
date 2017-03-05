@@ -17,7 +17,8 @@
 *              [-s scale to sigmas using smin,smax (Hz)]
 *              [-c channel] 
 *              [-i swap IQ before transform (invert freq axis)]
-*              [-w apply Hanning window before transform]
+*              [-H apply Hanning window before transform]
+*              [-C apply Chebyshev window after transform]
 *              [-S number of seconds to skip before applying first FFT]
 *              [-o outfile] [infile]
 *
@@ -43,6 +44,10 @@
 
 /* 
    $Log$
+   Revision 3.12  2016/12/24 22:21:06  jlm
+   Improved computation of scaling to sigmas: (1) check bounds, (2) compute
+   loop indices, (3) exclude points deviating by >3.5 sigmas from computation.
+
    Revision 3.11  2012/01/09 00:32:32  jlm
    Fixed uninitialized nskipbytes when nskipseconds = 0.
 
@@ -147,10 +152,12 @@ void open_file();
 void copy_cmd_line();
 void vector_power(float *data, int len);
 void vector_window(float *data, int len);
+void chebyshev_window(float *data, int len);
 void swap_freq(float *data, int len);
 void swap_iandq(float *data, int len);
 void zerofill(float *data, int len);
 int  no_comma_in_string();	
+double chebeval(double x, double c[], int degree);
 
 int main(int argc, char *argv[])
 {
@@ -185,7 +192,8 @@ int main(int argc, char *argv[])
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
   int invert;		/* swap i and q before fft routine */
-  int window;		/* apply Hanning window before fft routine */
+  int hanning;		/* apply Hanning window before fft routine */
+  int chebyshev;	/* apply Chebyshev window after fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
   int nskipseconds;     /* optional number of seconds to skip at beginning of file */
@@ -197,7 +205,7 @@ int main(int argc, char *argv[])
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&window,&nskipseconds);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebyshev,&nskipseconds);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -360,7 +368,7 @@ int main(int argc, char *argv[])
 
       /* transform, swap, and compute power */
       if (invert) swap_iandq(fftinbuf,fftlen); 
-      if (window) vector_window(fftinbuf,fftlen);
+      if (hanning) vector_window(fftinbuf,fftlen);
       fftw_one(p, (fftw_complex *)fftinbuf, (fftw_complex *)fftoutbuf);
       if (swap) swap_freq(fftoutbuf,fftlen); 
       vector_power(fftoutbuf,fftlen);
@@ -371,7 +379,10 @@ int main(int argc, char *argv[])
     }
   
   /* set DC to average of neighboring values  */
-  total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2; 
+  total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2.0; 
+
+  /* apply Chebyshev to detected power if needed */
+  if (chebyshev) chebyshev_window(total,fftlen);
   
   /* compute rms if needed */
   mean = 0;
@@ -393,12 +404,12 @@ int main(int argc, char *argv[])
       var1   = var1 / n1;
       sigma1 = sqrt(var1 - mean1 * mean1);
 
-      /* now redo calculation but exclude 5-sigma outliers */
+      /* now redo calculation but exclude 3-sigma outliers */
       mean = var = 0;
       n = 0;
       for (i = imin; i < imax; i++)
 	{
-	  if (fabs((total[i] - mean1)/sigma1) > 5)
+	  if (fabs((total[i] - mean1)/sigma1) > 3.5)
 	    continue;
 	  mean += total[i];
 	  var  += total[i] * total[i];
@@ -469,9 +480,77 @@ void vector_window(float *data, int len)
 }
 
 /******************************************************************************/
+/*	chebyshev_window							      */
+/******************************************************************************/
+void chebyshev_window(float *data, int len)
+{
+  /* Applies Chebyshev window the data array of length 'len' (floating point samples)
+  */
+  double x;
+  double weight;		/* calculated weight */
+  int    i;
+  static int degree=16;
+  double chebcoeff[degree+1];
+
+  chebcoeff[0] =    651090.38529285730328;
+  chebcoeff[1] =      -919.11953248944587;
+  chebcoeff[2] =   1180279.38587880739942;
+  chebcoeff[3] =      -734.57426046149180;
+  chebcoeff[4] =    876107.17212104320060;
+  chebcoeff[5] =      -464.87174796374330;
+  chebcoeff[6] =    527258.83548810286447;
+  chebcoeff[7] =      -228.18970284969566;
+  chebcoeff[8] =    252430.07412928054691;
+  chebcoeff[9] =       -83.67123499615249;
+  chebcoeff[10]=     93060.35921908360615;
+  chebcoeff[11]=       -21.41739940591507;
+  chebcoeff[12]=     24956.48362974725023;
+  chebcoeff[13]=        -3.34955874095518;
+  chebcoeff[14]=      4359.16236259104426;
+  chebcoeff[15]=        -0.22854307098977;
+  chebcoeff[16]=       374.62294626282801;
+
+  for (i=0; i<len; i++)
+  {
+    x = -0.5 + (double) i / (double) len;
+    weight = chebeval(x, chebcoeff, degree);
+    data[i] /= weight;
+  }
+  return;
+}
+
+/******************************************************************************/
+/*	chebeval							      */
+/******************************************************************************/
+double chebeval(double x, double c[], int degree)
+{
+  /* 
+     Evaluate a Chebyshev series at points x.
+     Expects an array `c` of length at least degree + 1 = n + 1
+     This function returns the value:
+     p(x) = c_0 * T_0(x) + c_1 * T_1(x) + ... + c_n * T_n(x)
+  */
+  double x2;
+  double c0, c1;
+  double tmp;
+  int i;
+  
+  x2 = 2*x;
+  c0 = c[degree-1];
+  c1 = c[degree];
+  for (i = 2; i <= degree; i++)    
+    {
+      tmp = c0;
+      c0 = c[degree-i] - c1;
+      c1 = tmp + c1*x2;
+    }
+  return c0 + c1*x;
+}
+
+/******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,window,nskipseconds)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebyshev,nskipseconds)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -490,7 +569,8 @@ float   *rmsmin;
 float   *rmsmax;
 int     *dB;
 int     *invert;
-int     *window;
+int     *hanning;
+int     *chebyshev;
 int     *nskipseconds;
 {
   /* function to process a programs input command line.
@@ -504,8 +584,8 @@ int     *nskipseconds;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iwS:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHCS:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C apply Chebyshev window after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -525,7 +605,8 @@ int     *nskipseconds;
   *chan = 1;
   *dB = 0;		/* default is linear output */
   *invert = 0;
-  *window = 0;
+  *hanning = 0;
+  *chebyshev = 0;
   *nskipseconds = 0;    /* default is process entire file */
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
@@ -587,8 +668,13 @@ int     *nskipseconds;
 	arg_count += 1;
 	break;
 
-      case 'w':
-	*window = 1;
+      case 'H':
+	*hanning = 1;
+	arg_count += 1;
+	break;
+
+      case 'C':
+	*chebyshev = 1;
 	arg_count += 1;
 	break;
 
