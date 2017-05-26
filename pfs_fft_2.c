@@ -1,8 +1,9 @@
 /*******************************************************************************
 *  program pfs_fft_2
 *  $Id$
-*  This programs performs spectral analysis on data acquired with
-*  the portable fast sampler.  It sums the powers obtained in two channels.
+*  This programs performs spectral analysis on data acquired with the portable
+*  fast sampler (PFS), JPL clones of the PFS, and other data-taking devices.
+*  It sums the powers obtained in two channels.
 *
 *  usage:
 *  	pfs_fft -m mode 
@@ -44,6 +45,7 @@
 
 /* 
    $Log$
+   Revision 1.1  2017/03/05 06:34:27  jlm
    Initial revision
 */
 
@@ -127,7 +129,7 @@ int main(int argc, char *argv[])
   int chebyshev;	/* apply Chebyshev window after fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
-  int nskipseconds;     /* optional number of seconds to skip at beginning of file */
+  float nskipseconds;     /* optional number of seconds to skip at beginning of file */
   int nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
   
@@ -199,7 +201,7 @@ int main(int argc, char *argv[])
   nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
   if (nskipseconds != 0)
     {
-      fprintf(stderr,"Skipping from BOF              : %qd seconds\n",nskipseconds);
+      fprintf(stderr,"Skipping from BOF              : %f seconds\n",nskipseconds);
       fprintf(stderr,"Skipping from BOF              : %qd bytes\n",nskipbytes);
     }
   fprintf(stderr,"\n");
@@ -550,7 +552,7 @@ int     *dB;
 int     *invert;
 int     *hanning;
 int     *chebyshev;
-int     *nskipseconds;
+float     *nskipseconds;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -634,7 +636,7 @@ int     *nskipseconds;
 	break;
 	
       case 'S':
-	sscanf(optarg,"%d",nskipseconds);
+	sscanf(optarg,"%f",nskipseconds);
 	arg_count += 2;
 	break;
 	
