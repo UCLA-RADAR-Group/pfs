@@ -1,0 +1,168 @@
+#!/usr/bin/perl -w
+
+use Errno qw(EAGAIN);
+use POSIX qw(strftime);
+use POSIX ":sys_wait_h";
+use Getopt::Std;
+use Time::Local;
+
+
+$usage = "logfiledas [-x sss] [-c n] [-f logfile ] [command head]
+  The default command is
+  radardas -clk 200/32 -d . 
+  This script will append
+  -secs nnn -start yyyy,mm,dd,hh,mm,ss
+  to whatever is given.
+  -x <seconds> will wait that many seconds before starting.
+  -m n will use -m n in the pfs_radar command.
+  -f logfile will use the given file instead of the default set by sbinit
+";
+  
+our ($opt_x, $opt_h);
+
+getopts('f:hc:x:');
+
+if (! $opt_x) {
+	$opt_x = 0;
+} else {
+	print STDERR "Adding a $opt_x second delay before starting.\n";
+}
+
+if (! $opt_c) {
+	$opt_c = 7;
+} else {
+	print STDERR "Using mode $opt_c\n";
+}
+
+if ($opt_h) {print $usage; exit 0;}
+
+%months = (Jan=>0, Feb=>1, Mar=>2, Apr=>3, May=>4, Jun=>5, Jul=>6, Aug=>7, Sep=>8, Oct=>9, Nov=>10, Dec=>11);
+$SPD=86400;
+$ASTOFF = 14400;
+
+$gotscan = 0;
+$pending = 0;
+
+if ($opt_f) {
+	$logfile = $opt_f;
+} else {
+
+open (LOGF, "</share/olda/sbdir") || die "Couldn't open /share/olda/sbdir and no logfile specified";
+$logfile = (<LOGF>) || die "Couldn't read logfile from /share/olda/sbdir";
+chomp $logfile;
+$logfile .= "/logfile";
+
+#$logfile = shift;
+}
+
+chomp $logfile;
+
+if (! defined($logfile)) {
+  die $usage;
+}
+
+print STDERR "using logfile $logfile\n";
+
+open (LOGFILE, $logfile) || die "Can't open logfile $logfile\n";
+
+if ($#ARGV > -1) {
+  $cmd = join(" ", @ARGV);
+} else {
+  $cmd = "radardas -clk 200/32 -d . -c $opt_c ";
+}
+print "Command is: $cmd\n";
+
+while (1) {
+  $now = time;
+ LOGLOOP: while (<LOGFILE>) {
+    chomp;
+    if ($nextisdate) {
+      ($Mon, $Day, $Hour, $Min, $Sec, $Year) = /\w+ (\w+) ([ \d]{2}) ([ \d]{2}):([ \d]{2}):([ \d]{2}) (\d{4})/;
+      $Year -= 1900;
+      $setup_secs = timegm($Sec, $Min, $Hour, $Day, $months{$Mon}, $Year) + $ASTOFF;
+      $nextisdate = 0;
+      next LOGLOOP;
+    }
+    
+    if (/rx cycle.*up:(.*) \(([0-9]*)\).*\(([0-9]*)\)/ ){
+      $rxuptime= $1;
+      $rxlength = $3 - $2 - $opt_x;
+      while ($rxlength < 0) {$rxlength += $SPD;}
+      ($hour, $min, $sec) = ($rxuptime =~ /(..):(..):(..)/);
+      $rxupsecs = timegm($sec, $min, $hour, $Day, $months{$Mon}, $Year) + $ASTOFF + $opt_x;
+      while ($rxupsecs < $setup_secs) { $rxupsecs += $SPD};  # must have crossed midnight
+      $dateTL = strftime("%Y %h %d", localtime($rxupsecs));
+      $datepfs = strftime("%Y,%m,%d,%H,%M,%S", gmtime($rxupsecs));
+      $statstring=  " Receive cycle $dateTL, rx at $rxuptime\n"; 
+      if ($rxupsecs < $now) {
+	print $statstring;
+	print "Run is in the past, skipping\n";
+	next LOGLOOP;
+      } else {
+	# This is a real run, run it
+	$gotscan = 1;
+      }
+      
+    }
+    if (/closeloop.*up:([0-9]*)\/(.*) down:([0-9]*)/) {
+      $txlength = $3 - $1;
+      while ($txlength < 0) {$txlength += $SPD;}
+      $rxlength = $txlength;
+      $rxuptime=$2;
+      ($hour, $min, $sec) = ($rxuptime =~ /(..):(..):(..)/);
+      $rxupsecs = timegm($sec, $min, $hour, $Day, $months{$Mon}, $Year)+$ASTOFF;
+      
+      while ($rxupsecs < $setup_secs) { $rxupsecs += $SPD};  # must have crossed midnight
+      $dateTL = strftime("%Y %h %d", localtime($rxupsecs));
+      $datepfs = strftime("%Y,%m,%d,%H,%M,%S", gmtime($rxupsecs));
+      $statstring=  " Closed loop test at $dateTL, rx at $rxuptime\n"; 
+      if ($rxupsecs < $now) {
+	print $statstring;
+	print "Run is in the past, skipping\n";
+	next LOGLOOP;
+      } else {
+	# This is a real run, run it
+	$gotscan = 1;
+      }
+      
+    }
+
+    if (/^sbinit logstart/) {$nextisdate = 1;}
+    
+  } # at end of logfile
+  
+  if ($gotscan) {
+    $gotscan = 0;
+    if ($pending) { # We have one running, and need to kill it
+      $pending = 0;
+      kill (INT, $child);
+      print STDERR "Trying to kill child\n";
+      waitpid ($child, 0); # Should we do this in the event loop?
+      print STDERR "Killed child\n";
+    }
+# Now send the command
+    $cmdsend = "$cmd -secs $rxlength -start $datepfs";
+    $now_string = localtime;
+    print "$now_string\n$cmdsend\n";
+    if ($child = fork) {  #parent
+      $pending = 1;
+    } elsif (defined $child) { # child
+      exec $cmdsend || die "Can't exec $cmdsend\n";
+      die "Notreached";
+    } elsif ($! == EAGAIN) {
+      die "Got EAGAIN, but do we have time?\n";
+    } else {
+      die "Can't fork: $!\n";
+    }
+    
+  }
+
+  if ($pending && waitpid ($child, &WNOHANG)) { # true if child dead or nonexistant
+    $pending = 0;
+    print STDERR "Child finished\n";
+  }
+
+  
+  sleep 1;
+  seek (LOGFILE, 0, 1); # clear EOF and go around again
+}
