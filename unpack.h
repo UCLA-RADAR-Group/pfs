@@ -10,3 +10,8 @@ void unpack_pfs_4c4b_lcp (unsigned char *buf, char *lcp, int bufsize);
 
 void unpack_pfs_signed16bits(char *buf, float *outbuf, int bufsize);
 
+void unpack_pfs_2c8b_sb (char *buf, char *outbuf, int bufsize);
+void unpack_pfs_4c8b_rcp (unsigned char *buf, char *rcp, int bufsize);
+void unpack_pfs_4c8b_lcp (unsigned char *buf, char *lcp, int bufsize);
+void unpack_pfs_4c8b_rcp_sb (unsigned char *buf, char *rcp, int bufsize);
+void unpack_pfs_4c8b_lcp_sb (unsigned char *buf, char *lcp, int bufsize);
