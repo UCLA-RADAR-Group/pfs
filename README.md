@@ -40,7 +40,7 @@ If you use these programs, please cite the paper describing the instrument: J. L
        make; make install
        ```
 
-# Additional requirements for new hardware installations
+# Additional requirements for new PFS hardware installations
 
 - EDT driver from [www.edt.com](www.edt.com), installed in its default /opt/EDTpcd location
 
@@ -79,7 +79,7 @@ If you use these programs, please cite the paper describing the instrument: J. L
 
 Download a [users guide](https://seti.ucla.edu/jlm/research/pfs/pfs_usage.pdf).  
 
-More information is available at the [project webpage](https://seti.ucla.edu/jlm/research/pfs/).  
+More information is available at the [PFS project webpage](https://seti.ucla.edu/jlm/research/pfs/).  
 
 # Credits
 Most of the software was written by Jean-Luc Margot, with some contributions from Jeff Hagen and Joseph Jao.
