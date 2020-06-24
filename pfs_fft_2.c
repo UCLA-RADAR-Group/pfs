@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_fft_2
-*  $Id: pfs_fft_2.c,v 4.1 2020/05/21 15:31:48 jlm Exp $
+*  $Id: pfs_fft_2.c,v 4.2 2020/05/21 17:47:53 jlm Exp $
 *  This programs performs spectral analysis on data acquired with the portable
 *  fast sampler (PFS), JPL clones of the PFS, and other data-taking devices.
 *  It sums the powers obtained in two channels.
@@ -19,7 +19,7 @@
 *              [-c channel] 
 *              [-i swap IQ before transform (invert freq axis)]
 *              [-H apply Hanning window before transform]
-*              [-C apply Chebyshev window after transform]
+*              [-C file of Chebyshev polynomial coefficients defining window to apply after transform] 
 *              [-S number of seconds to skip before applying first FFT]
 *              [-o outfile] [infile]
 *
@@ -45,8 +45,8 @@
 
 /* 
    $Log: pfs_fft_2.c,v $
-   Revision 4.1  2020/05/21 15:31:48  jlm
-   Added README.fftw3
+   Revision 4.2  2020/05/21 17:47:53  jlm
+   Added capability to read file of Chebyshev coefficients.
 
    Revision 4.0  2020/05/21 05:50:17  jlm
    Upgraded to FFTW3
@@ -62,7 +62,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef __APPLE__
+#ifdef MAC
 #include <fcntl.h>
 #else
 #include <asm/fcntl.h>
@@ -73,7 +73,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id: pfs_fft_2.c,v 4.1 2020/05/21 15:31:48 jlm Exp $";
+"$Id: pfs_fft_2.c,v 4.2 2020/05/21 17:47:53 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput1;		/* file descriptor for input file 1 */
@@ -82,6 +82,7 @@ int	fdinput2;		/* file descriptor for input file 2 */
 char   *outfile;		/* output file name */
 char   *infile1;	        /* input file name 1 */
 char   *infile2;	        /* input file name 2 */
+char   *chebfile;	        /* file of Chebyshev coefficients */
 
 char	command_line[512];	/* command line assembled by processargs */
 
@@ -90,12 +91,13 @@ void open_file();
 void copy_cmd_line();
 void vector_power(float *data, int len);
 void vector_window(float *data, int len);
-void chebyshev_window(float *data, int len);
+void chebyshev_window(float *data, int len, double *chebcoeff, int degree);
 void swap_freq(float *data, int len);
 void swap_iandq(float *data, int len);
 void zerofill(float *data, int len);
 int  no_comma_in_string();	
 double chebeval(double x, double c[], int degree);
+int  read_cheb_coeffs(char *chebfile, double *chebcoeff);
 
 int main(int argc, char *argv[])
 {
@@ -108,11 +110,14 @@ int main(int argc, char *argv[])
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
   int nsamples;		/* # of complex samples in each buffer */
   int levels;		/* # of levels for given quantization mode */
+  int degree=0;         /* degree of Chebyshev polynomial, default none */
 
   float *fftinbuf1, *fftoutbuf1;
   float *fftinbuf2, *fftoutbuf2;
   float *total1,*total2;
   float *total;
+
+  double *chebcoeff;    /* array for polynomial coefficients */
 
   float freq;		/* frequency */
   float freqmin;	/* min frequency to output */
@@ -135,7 +140,6 @@ int main(int argc, char *argv[])
   int open_flags;	/* flags required for open() call */
   int invert;		/* swap i and q before fft routine */
   int hanning;		/* apply Hanning window before fft routine */
-  int chebyshev;	/* apply Chebyshev window after fft routine */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
   float nskipseconds;     /* optional number of seconds to skip at beginning of file */
@@ -148,7 +152,7 @@ int main(int argc, char *argv[])
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile1,&infile2,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebyshev,&nskipseconds);
+  processargs(argc,argv,&infile1,&infile2,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -171,6 +175,13 @@ int main(int argc, char *argv[])
     {
       perror("open input file");
       exit(1);
+    }
+
+  /* read Cheb coefficients, if requested */
+  if (chebfile[0] != '-') 
+    {
+      chebcoeff = (double *) malloc(64 * sizeof(double));   /* allocate up to 64 coefficients */
+      degree = read_cheb_coeffs(chebfile, chebcoeff);       /* read coeffs and return degree */
     }
 
   switch (mode)
@@ -211,6 +222,9 @@ int main(int argc, char *argv[])
       fprintf(stderr,"Skipping from BOF              : %f seconds\n",nskipseconds);
       fprintf(stderr,"Skipping from BOF              : %qd bytes\n",nskipbytes);
     }
+  if (chebfile[0] != '-')
+    fprintf(stderr, "Degree of Chebyshev polynomial : %d\n",degree);    
+  /* for (i = 0; i <= degree; i++) fprintf(stderr, "%d %lf\n", i, chebcoeff[i]); */
   fprintf(stderr,"\n");
     
   /* skip unwanted bytes */
@@ -373,7 +387,7 @@ int main(int argc, char *argv[])
     total[j] = total1[j] + total2[j];
 
   /* apply Chebyshev to detected power if needed */
-  if (chebyshev) chebyshev_window(total,fftlen);
+  if (degree) chebyshev_window(total,fftlen,chebcoeff,degree);
   
   /* compute rms if needed */
   mean = 0;
@@ -478,35 +492,15 @@ void vector_window(float *data, int len)
 }
 
 /******************************************************************************/
-/*	chebyshev_window							      */
+/*	chebyshev_window						      */
 /******************************************************************************/
-void chebyshev_window(float *data, int len)
+void chebyshev_window(float *data, int len, double *chebcoeff, int degree)
 {
   /* Applies Chebyshev window the data array of length 'len' (floating point samples)
   */
   double x;
   double weight;		/* calculated weight */
   int    i;
-  static int degree=16;
-  double chebcoeff[degree+1];
-
-  chebcoeff[0] =    651090.38529285730328;
-  chebcoeff[1] =      -919.11953248944587;
-  chebcoeff[2] =   1180279.38587880739942;
-  chebcoeff[3] =      -734.57426046149180;
-  chebcoeff[4] =    876107.17212104320060;
-  chebcoeff[5] =      -464.87174796374330;
-  chebcoeff[6] =    527258.83548810286447;
-  chebcoeff[7] =      -228.18970284969566;
-  chebcoeff[8] =    252430.07412928054691;
-  chebcoeff[9] =       -83.67123499615249;
-  chebcoeff[10]=     93060.35921908360615;
-  chebcoeff[11]=       -21.41739940591507;
-  chebcoeff[12]=     24956.48362974725023;
-  chebcoeff[13]=        -3.34955874095518;
-  chebcoeff[14]=      4359.16236259104426;
-  chebcoeff[15]=        -0.22854307098977;
-  chebcoeff[16]=       374.62294626282801;
 
   for (i=0; i<len; i++)
   {
@@ -549,7 +543,7 @@ double chebeval(double x, double c[], int degree)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile1,infile2,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebyshev,nskipseconds)
+void	processargs(argc,argv,infile1,infile2,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile1;		 /* input file name 1 */
@@ -570,7 +564,7 @@ float   *rmsmax;
 int     *dB;
 int     *invert;
 int     *hanning;
-int     *chebyshev;
+char    **chebfile;
 float     *nskipseconds;
 {
   /* function to process a programs input command line.
@@ -584,8 +578,8 @@ float     *nskipseconds;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHCS:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-H apply Hanning window before transform] [-C apply Chebyshev window after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] infile1 infile2";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-H apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] infile1 infile2";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -607,7 +601,7 @@ float     *nskipseconds;
   *dB = 0;		/* default is linear output */
   *invert = 0;
   *hanning = 0;
-  *chebyshev = 0;
+  *chebfile = "-";
   *nskipseconds = 0;    /* default is process entire file */
   *freqmin = 0;		/* not set value */
   *freqmax = 0;		/* not set value */
@@ -675,8 +669,8 @@ float     *nskipseconds;
 	break;
 
       case 'C':
-	*chebyshev = 1;
-	arg_count += 1;
+ 	*chebfile = optarg;	/* file name for Cheb coefficients */
+ 	arg_count += 2;		/* two command line arguments */
 	break;
 
       case 'b':
@@ -791,6 +785,32 @@ FILE    **fpoutput;		/* pointer to output file */
 	}
     }
   return;
+}
+
+/******************************************************************************/
+/*	read cheb coeffs						      */
+/******************************************************************************/
+int     read_cheb_coeffs(char *chebfile, double *chebcoeff)
+{
+  int degree = 0;
+  FILE   *fpcheb;		/* pointer to file of Cheb coefficients */
+
+  /* open the Cheb coeff file */
+  fpcheb=fopen(chebfile,"r");
+  if (fpcheb == NULL)
+    {
+      perror("read_cheb_coeff: cheb coefficients file open error");
+      exit(1);
+    }
+
+  /* read coefficients */
+  while (fscanf(fpcheb, "%lf", &chebcoeff[degree++]) == 1)
+    continue;
+
+  degree = degree - 1; /* EOF does not count */
+  degree = degree - 1; /* number of coeffs = degree + 1 */
+
+  return degree;
 }
 
 /******************************************************************************/
