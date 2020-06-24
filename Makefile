@@ -8,13 +8,14 @@
 include Makefile.inc
 #
 #
-PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes pfs_fold
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes 
 DTPROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
-OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o pfs_fold.o multifile.o libunpack.o
+OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
 DTOBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
 #
 #
-all: $(PROGRAMS) $(DTPROGRAMS)
+all: $(PROGRAMS)
+datataking: $(DTPROGRAMS)
 #
 #
 # pfs_radar acquires data from the portable fast sampler
@@ -124,14 +125,6 @@ pfs_skipbytes : pfs_skipbytes.o
 	-o pfs_skipbytes
 #	  
 #
-# pfs_fold detects and folds data
-#
-pfs_fold : pfs_fold.o 
-	$(CC) pfs_fold.o libunpack.o \
-	$(LDFLAGS) \
-	-o pfs_fold
-#	  
-#
 #
 pfs_radar.o:	 pfs_radar.c ;	   $(CC) $(CFLAGS) -c pfs_radar.c -I/opt/EDTpcd
 pfs_sample.o:	 pfs_sample.c ;	   $(CC) $(CFLAGS) -c pfs_sample.c -I/opt/EDTpcd
@@ -146,7 +139,6 @@ pfs_fft.o:	 pfs_fft.c ;	   $(CC) $(CFLAGS) -c pfs_fft.c
 pfs_fft_2.o:	 pfs_fft_2.c ;	   $(CC) $(CFLAGS) -c pfs_fft_2.c 
 pfs_dehop.o:	 pfs_dehop.c ;     $(CC) $(CFLAGS) -c pfs_dehop.c 
 pfs_skipbytes.o: pfs_skipbytes.c ; $(CC) $(CFLAGS) -c pfs_skipbytes.c 
-pfs_fold.o:      pfs_fold.c ;      $(CC) $(CFLAGS) -c pfs_fold.c
 multifile.o:	 multifile.c ;     $(CC) $(CFLAGS) -c multifile.c
 libunpack.o:     unp_pfs_pc_edt.c; $(CC) $(CFLAGS) -c unp_pfs_pc_edt.c -o libunpack.o 
 #
