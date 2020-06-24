@@ -62,7 +62,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef MAC
+#ifdef __APPLE__
 #include <fcntl.h>
 #else
 #include <asm/fcntl.h>
