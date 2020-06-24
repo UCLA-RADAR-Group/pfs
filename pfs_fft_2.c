@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_fft_2
-*  $Id$
+*  $Id: pfs_fft_2.c,v 4.1 2020/05/21 15:31:48 jlm Exp $
 *  This programs performs spectral analysis on data acquired with the portable
 *  fast sampler (PFS), JPL clones of the PFS, and other data-taking devices.
 *  It sums the powers obtained in two channels.
@@ -44,7 +44,16 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_fft_2.c,v $
+   Revision 4.1  2020/05/21 15:31:48  jlm
+   Added README.fftw3
+
+   Revision 4.0  2020/05/21 05:50:17  jlm
+   Upgraded to FFTW3
+
+   Revision 1.2  2017/05/26 04:33:07  jlm
+   Allowed for non-integer values in nskipseconds.
+
    Revision 1.1  2017/03/05 06:34:27  jlm
    Initial revision
 */
@@ -60,11 +69,11 @@
 #endif
 #include <unistd.h>
 #include "unpack.h"
-#include <fftw.h>
+#include <fftw3.h>
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_fft_2.c,v 4.1 2020/05/21 15:31:48 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput1;		/* file descriptor for input file 1 */
@@ -133,7 +142,8 @@ int main(int argc, char *argv[])
   int nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
   
-  fftw_plan p;
+  fftwf_plan p1;
+  fftwf_plan p2;
   int i,j,k,l,n,n1;
   short x;
 
@@ -181,9 +191,6 @@ int main(int argc, char *argv[])
   fftlen = (int) rint(fsamp / freqres * 1e6);
   bufsize = fftlen * 4 / smpwd; 
   fftlen = fftlen / downsample;
-
-  /* compute fft plan and allocate storage */
-  p = fftw_create_plan(fftlen, FFTW_FORWARD, FFTW_ESTIMATE);
 
   /* describe what we are doing */
   fprintf(stderr,"\n%s\n\n",command_line);
@@ -247,6 +254,10 @@ int main(int argc, char *argv[])
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
     }
+
+  /* compute fft plan */
+  p1 = fftwf_plan_dft_1d(fftlen, (fftwf_complex *)fftinbuf1, (fftwf_complex *)fftoutbuf1, FFTW_FORWARD, FFTW_ESTIMATE);
+  p2 = fftwf_plan_dft_1d(fftlen, (fftwf_complex *)fftinbuf2, (fftwf_complex *)fftoutbuf2, FFTW_FORWARD, FFTW_ESTIMATE);
 
   /* label used if time series is requested */
  loop:
@@ -338,8 +349,8 @@ int main(int argc, char *argv[])
       if (invert) swap_iandq(fftinbuf2,fftlen); 
       if (hanning) vector_window(fftinbuf1,fftlen);
       if (hanning) vector_window(fftinbuf2,fftlen);
-      fftw_one(p, (fftw_complex *)fftinbuf1, (fftw_complex *)fftoutbuf1);
-      fftw_one(p, (fftw_complex *)fftinbuf2, (fftw_complex *)fftoutbuf2);
+      fftwf_execute(p1); 
+      fftwf_execute(p2); 
       if (swap) swap_freq(fftoutbuf1,fftlen);
       if (swap) swap_freq(fftoutbuf2,fftlen); 
       vector_power(fftoutbuf1,fftlen);
@@ -433,6 +444,13 @@ int main(int argc, char *argv[])
 	      fprintf(fpoutput,"% .3f % .3e\n",freq,value);  
 	  }
       }
+
+  fftwf_destroy_plan(p1);
+  fftwf_destroy_plan(p2);
+  free(fftinbuf1);
+  free(fftoutbuf1);
+  free(fftinbuf2);
+  free(fftoutbuf2);
   
   return 0;
 }
@@ -495,6 +513,7 @@ void chebyshev_window(float *data, int len)
     x = -0.5 + (double) i / (double) len;
     weight = chebeval(x, chebcoeff, degree);
     data[i] /= weight;
+    /* fprintf(stderr,"%lf %lf %lf\n",weight,data[i],data[i]/weight); */
   }
   return;
 }
