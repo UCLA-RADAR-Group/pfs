@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_skipbytes
-*  $Id$
+*  $Id: pfs_skipbytes.c,v 1.7 2009/11/16 19:08:50 jlm Exp $
 *  This program reads nbyte-size records of data from the input file
 *  optionally skipping over a user-specified number of bytes, and 
 *  optionally writing out a user-specified window.
@@ -24,7 +24,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_skipbytes.c,v $
+   Revision 1.7  2009/11/16 19:08:50  jlm
+   Added ifdef flag for Mac compilation.
+
    Revision 1.6  2003/11/05 23:27:02  cvs
    Now using lseek() to skip unwanted bytes.
    Changed test on read() statement.
@@ -59,7 +62,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_skipbytes.c,v 1.7 2009/11/16 19:08:50 jlm Exp $";
 
 int	fdinput;		/* file descriptor for input file */
 FILE   *fpinput;		/* pointer to input file */

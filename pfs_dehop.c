@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_dehop
-*  $Id$
+*  $Id: pfs_dehop.c,v 1.7 2009/11/16 19:11:45 jlm Exp $
 *  This programs dehops spectra obtained with the pfs_fft program
 *  It expects a time series of one or more ffts per dwell time
 *  Input data are assumed to be four byte floating point numbers
@@ -29,7 +29,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_dehop.c,v $
+   Revision 1.7  2009/11/16 19:11:45  jlm
+   Added ifdef flag for Mac compilation.
+
    Revision 1.6  2002/04/27 20:25:31  margot
    Changed location of include file for O_LARGEFILE
 
@@ -65,7 +68,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_dehop.c,v 1.7 2009/11/16 19:11:45 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput;		/* file descriptor for input file */

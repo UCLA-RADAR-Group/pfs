@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_stats
-*  $Id$
+*  $Id: pfs_stats.c,v 3.2 2009/11/16 19:08:21 jlm Exp $
 *  This programs unpacks some data from the portable fast sampler
 *  and prints statistics such as mean and standard deviation for 
 *  all channels
@@ -22,7 +22,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_stats.c,v $
+   Revision 3.2  2009/11/16 19:08:21  jlm
+   Added ifdef flag for Mac compilation.
+
    Revision 3.1  2003/02/26 00:42:59  margot
    Fixed first argument to floatsum()
 
@@ -79,7 +82,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_stats.c,v 3.2 2009/11/16 19:08:21 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput;		/* file descriptor for input file */

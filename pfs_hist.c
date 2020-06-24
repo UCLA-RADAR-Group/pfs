@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_hist
-*  $Id$
+*  $Id: pfs_hist.c,v 3.4 2020/05/21 15:43:09 jlm Exp $
 *  This programs unpacks some data from the portable fast sampler
 *  and prints and histogram of count values for all channels
 *
@@ -21,7 +21,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+
+   Revision 3.2  2009/11/16 19:09:15  jlm
+   Added ifdef flag for Mac compilation
+
    Revision 3.1  2007/06/19 17:00:21  jao
    Implemented '-a' option, mode 7 (4c8b) historgram, and 2's complemnt for mode 3 & 7
 
@@ -68,7 +71,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_hist.c,v 3.4 2020/05/21 15:43:09 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput;		/* file descriptor for input file */

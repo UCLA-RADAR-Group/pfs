@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_downsample
-*  $Id$
+*  $Id: pfs_downsample.c,v 3.16 2014/01/07 02:27:21 jlm Exp $
 *  This programs downsamples data from the portable fast sampler
 *  by summing coherently a specified number of consecutive samples
 *
@@ -27,7 +27,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_downsample.c,v $
+   Revision 3.16  2014/01/07 02:27:21  jlm
+   pfs_downsample.c
+
    Revision 3.15  2011/09/30 18:59:38  jlm
    Fixed non-functional '-i' option introduced in 3.7.
 
@@ -139,7 +142,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_downsample.c,v 3.16 2014/01/07 02:27:21 jlm Exp $";
 
 int	fdinput;		/* file descriptor for input file */ 
 int	fdoutput;		/* file descriptor to output file */
