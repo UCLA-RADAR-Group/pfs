@@ -35,17 +35,16 @@ call 310 206 8345 and an operator will assist you.
 
 Then use the CVS check-out command (co) to download the software:
 
-% cvs co fftw
 % cvs co pfs
 % cvs co radardecode
 
-Compile the fft library:
+I assume that the widely available FFTW3 library is available on your
+system.  If it is not, you can install it with your package manager.
 
-% cd fftw
-% ./configure --enable-float --prefix=/home/pfs
-% make
-% make install
-% cd ..
+RedHat/CentOS:
+% sudo yum install fftw fftw-devel
+Debian/Ubuntu:
+% sudo apt-get install libfftw3-3 libfftw3-dev
 
 Compile the pfs software:
 
@@ -55,7 +54,7 @@ Compile the pfs software:
 % cd ..
 
 If compilation fails and you believe you followed instructions, 
-please send a bug report to jlm@ess.ucla.edu.  
+please send a bug report to jlm@epss.ucla.edu.  
 You may have to edit Makefile.inc if your setup is non-standard.
 You may have to compile the EDT library if you have not done so.
 Mac-friendly versions of the Makefile and Makefile.inc are included.
@@ -83,4 +82,4 @@ UCLA Physics and Astronomy
 Los Angeles, CA 90095 
 (310) 206 8345 
 jlm@epss.ucla.edu
-http://mel.epss.ucla.edu/jlm 
+https://seti.ucla.edu/jlm 
