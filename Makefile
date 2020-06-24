@@ -8,9 +8,9 @@
 include Makefile.inc
 #
 #
-PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_dehop pfs_skipbytes
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes pfs_fold
 DTPROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
-OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
+OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o pfs_fold.o multifile.o libunpack.o
 DTOBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
 #
 #
@@ -96,9 +96,18 @@ pfs_downsample : pfs_downsample.o
 #
 pfs_fft : pfs_fft.o 
 	$(CC) pfs_fft.o libunpack.o \
-	-lfftw \
+	-lfftw3f \
 	$(LDFLAGS) \
 	-o pfs_fft
+#
+# pfs_fft_2 performs spectral analysis on data from the portable fast sampler
+# and sums powers from two channels
+#
+pfs_fft_2 : pfs_fft_2.o 
+	$(CC) pfs_fft_2.o libunpack.o \
+	-lfftw3f \
+	$(LDFLAGS) \
+	-o pfs_fft_2
 #
 # pfs_dehop dehops fft spectra
 #
@@ -113,7 +122,15 @@ pfs_skipbytes : pfs_skipbytes.o
 	$(CC) pfs_skipbytes.o \
 	$(LDFLAGS) \
 	-o pfs_skipbytes
+#	  
 #
+# pfs_fold detects and folds data
+#
+pfs_fold : pfs_fold.o 
+	$(CC) pfs_fold.o libunpack.o \
+	$(LDFLAGS) \
+	-o pfs_fold
+#	  
 #
 #
 pfs_radar.o:	 pfs_radar.c ;	   $(CC) $(CFLAGS) -c pfs_radar.c -I/opt/EDTpcd
@@ -125,9 +142,11 @@ pfs_hist.o:	 pfs_hist.c ;	   $(CC) $(CFLAGS) -c pfs_hist.c
 pfs_stats.o:	 pfs_stats.c ;	   $(CC) $(CFLAGS) -c pfs_stats.c 
 pfs_unpack.o:    pfs_unpack.c ;    $(CC) $(CFLAGS) -c pfs_unpack.c 
 pfs_downsample.o:pfs_downsample.c ;$(CC) $(CFLAGS) -c pfs_downsample.c 
-pfs_fft.o:	 pfs_fft.c ;	   $(CC) $(CFLAGS) -c pfs_fft.c 
+pfs_fft.o:	 pfs_fft.c ;	   $(CC) $(CFLAGS) -c pfs_fft.c
+pfs_fft_2.o:	 pfs_fft_2.c ;	   $(CC) $(CFLAGS) -c pfs_fft_2.c 
 pfs_dehop.o:	 pfs_dehop.c ;     $(CC) $(CFLAGS) -c pfs_dehop.c 
 pfs_skipbytes.o: pfs_skipbytes.c ; $(CC) $(CFLAGS) -c pfs_skipbytes.c 
+pfs_fold.o:      pfs_fold.c ;      $(CC) $(CFLAGS) -c pfs_fold.c
 multifile.o:	 multifile.c ;     $(CC) $(CFLAGS) -c multifile.c
 libunpack.o:     unp_pfs_pc_edt.c; $(CC) $(CFLAGS) -c unp_pfs_pc_edt.c -o libunpack.o 
 #
@@ -150,4 +169,4 @@ dtinstall: $(DTPROGRAMS)
 
 #
 distrib:
-	tar cvf distrib.tar Makefile multifile.c multifile.h unpack.h unp_pfs_pc_edt.c pfs_radar.c pfs_sample.c pfs_trigger.c pfs_reset.c pfs_levels.c pfs_hist.c pfs_stats.c pfs_unpack.c pfs_downsample.c pfs_fft.c pfs_dehop.c pfs_skipbytes.c
+	tar cvf distrib.tar Makefile multifile.c multifile.h unpack.h unp_pfs_pc_edt.c pfs_radar.c pfs_sample.c pfs_trigger.c pfs_reset.c pfs_levels.c pfs_hist.c pfs_stats.c pfs_unpack.c pfs_downsample.c pfs_fft.c pfs_fft_2.c pfs_dehop.c pfs_skipbytes.c
