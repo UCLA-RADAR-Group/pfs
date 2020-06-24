@@ -1,11 +1,11 @@
 #
 #	Makefile to build pfs programs
 #
-#       The include file contains the definitions of environment variables
-#       It is not included in the distribution so that you don't overwrite
-#       your local settings when doing a software upgrade
-#
-include Makefile.inc
+SHELL=/bin/csh
+CC=gcc
+GLOBDIR=$(HOME)/bin
+CFLAGS  = -I../include -I/opt/local/include -O3 -DLARGEFILE -D_FILE_OFFSET_BITS=64
+LDFLAGS = -L/opt/local/lib -lm
 #
 #
 PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes 
@@ -145,18 +145,19 @@ libunpack.o:     unp_pfs_pc_edt.c; $(CC) $(CFLAGS) -c unp_pfs_pc_edt.c -o libunp
 #
 #
 clean:
-	/bin/rm -f a.out core $(OBJECTS) $(PROGRAMS) $(DTOBJECTS) $(DTPROGRAMS) $(LIBOBJECTS) *~ \#*
+	/bin/rm -f a.out core $(OBJECTS) $(PROGRAMS) $(DTOBJECTS) $(DTPROGRAMS) 
 #
 install: $(PROGRAMS) 
 	@echo 'Installing programs : $(PROGRAMS)'
-	@for f in $(PROGRAMS); \
-	do install $$f $(DESTDIR)/$$f; \
-	done;
+#	@for f in $(PROGRAMS); \
+#	do install $$f $(GLOBDIR)/$$f; \
+#	done;
+	cp $(PROGRAMS) $(GLOBDIR)
 
 dtinstall: $(DTPROGRAMS)
 	@echo 'Installing programs : $(DTPROGRAMS)'
 	@for f in $(DTPROGRAMS); \
-	do install $$f $(DESTDIR)/$$f; \
+	do install $$f $(GLOBDIR)/$$f; \
 	done;
 
 #
