@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
   open_file(outfile,&fpoutput);
 
   /* open file input */
-#ifdef LARGEFILE
+#ifndef __APPLE__
   open_flags = O_RDONLY|O_LARGEFILE;
 #else
   open_flags = O_RDONLY;

@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
     }
 
   /* open input file */
-#ifdef LARGEFILE
+#ifndef __APPLE__
   open_rflags = O_RDONLY|O_LARGEFILE;
 #else
   open_rflags = O_RDONLY;
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
   }
 
   /* open output file, stdout is default */
-#ifdef LARGEFILE
+#ifndef __APPLE__
   open_wflags = O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE;
 #else
   open_wflags = O_RDWR | O_CREAT | O_TRUNC;

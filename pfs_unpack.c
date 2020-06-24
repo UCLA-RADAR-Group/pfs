@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
   copy_cmd_line(argc,argv,command_line);
 
   /* open file input */
-#ifdef LARGEFILE
+#ifndef __APPLE__
   if (infile[0] == '-')
     fdinput=0;
   else if((fdinput = open(infile, O_RDONLY|O_LARGEFILE)) < 0 )
