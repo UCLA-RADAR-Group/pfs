@@ -1,4 +1,5 @@
 #include "unpack.h"
+#include "string.h"
 
 #define DBG1
 
