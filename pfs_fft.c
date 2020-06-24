@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_fft
-*  $Id$
+*  $Id: pfs_fft.c,v 4.1 2020/05/21 15:31:48 jlm Exp $
 *  This programs performs spectral analysis on data acquired with
 *  the portable fast sampler
 *
@@ -43,7 +43,16 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_fft.c,v $
+   Revision 4.1  2020/05/21 15:31:48  jlm
+   Added README.fftw3
+
+   Revision 4.0  2020/05/21 05:50:00  jlm
+   Upgraded to FFTW3
+
+   Revision 3.13  2017/03/05 05:35:27  jlm
+   Added -C option to allow for application of Chebyshev polynomial after FFT.
+
    Revision 3.12  2016/12/24 22:21:06  jlm
    Improved computation of scaling to sigmas: (1) check bounds, (2) compute
    loop indices, (3) exclude points deviating by >3.5 sigmas from computation.
@@ -133,11 +142,11 @@
 #endif
 #include <unistd.h>
 #include "unpack.h"
-#include <fftw.h>
+#include <fftw3.h>
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_fft.c,v 4.1 2020/05/21 15:31:48 jlm Exp $";
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput;		/* file descriptor for input file */
@@ -200,7 +209,7 @@ int main(int argc, char *argv[])
   int nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
   
-  fftw_plan p;
+  fftwf_plan p;
   int i,j,k,l,n,n1;
   short x;
 
@@ -243,9 +252,6 @@ int main(int argc, char *argv[])
   fftlen = (int) rint(fsamp / freqres * 1e6);
   bufsize = fftlen * 4 / smpwd; 
   fftlen = fftlen / downsample;
-
-  /* compute fft plan and allocate storage */
-  p = fftw_create_plan(fftlen, FFTW_FORWARD, FFTW_ESTIMATE);
 
   /* describe what we are doing */
   fprintf(stderr,"\n%s\n\n",command_line);
@@ -298,6 +304,9 @@ int main(int argc, char *argv[])
       fprintf(stderr,"Malloc error\n"); 
       exit(1);
     }
+
+  /* compute fft plan */
+  p = fftwf_plan_dft_1d(fftlen, (fftwf_complex *)fftinbuf, (fftwf_complex *)fftoutbuf, FFTW_FORWARD, FFTW_ESTIMATE);
 
   /* label used if time series is requested */
  loop:
@@ -369,7 +378,7 @@ int main(int argc, char *argv[])
       /* transform, swap, and compute power */
       if (invert) swap_iandq(fftinbuf,fftlen); 
       if (hanning) vector_window(fftinbuf,fftlen);
-      fftw_one(p, (fftw_complex *)fftinbuf, (fftw_complex *)fftoutbuf);
+      fftwf_execute(p); 
       if (swap) swap_freq(fftoutbuf,fftlen); 
       vector_power(fftoutbuf,fftlen);
       
@@ -453,6 +462,10 @@ int main(int argc, char *argv[])
 	      fprintf(fpoutput,"% .3f % .3e\n",freq,value);  
 	  }
       }
+  
+  fftwf_destroy_plan(p);
+  free(fftinbuf);
+  free(fftoutbuf);
   
   return 0;
 }
@@ -585,7 +598,7 @@ int     *nskipseconds;
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
   char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHCS:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C apply Chebyshev window after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-H apply Hanning window before transform] [-C apply Chebyshev window after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
