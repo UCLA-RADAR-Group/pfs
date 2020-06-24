@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_reset
-*  $Id$
+*  $Id: pfs_reset.c,v 1.2 2002/05/13 02:41:14 cvs Exp $
 *  This program resets the PFS hardware
 *
 *  usage:
@@ -14,7 +14,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_reset.c,v $
+   Revision 1.2  2002/05/13 02:41:14  cvs
+   Added some verbosity
+
    Revision 1.1  2002/05/12 23:16:24  cvs
    This program resets the PFS hardware.
 
@@ -29,7 +32,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_reset.c,v 1.2 2002/05/13 02:41:14 cvs Exp $";
 
 int main(int argc, char **argv)
 {

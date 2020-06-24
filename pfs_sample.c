@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_sample
-*  $Id$
+*  $Id: pfs_sample.c,v 3.1 2003/09/18 03:01:19 cvs Exp $
 *  This programs reads some data from the portable fast sampler
 *
 *  usage:
@@ -18,7 +18,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_sample.c,v $
+   Revision 3.1  2003/09/18 03:01:19  cvs
+   Fixed bug: printing format must now be integer, not float
+
    Revision 3.0  2003/02/25 22:00:59  cvs
    Adapted to use Joseph Jao's byte unpacking.
 
@@ -43,7 +46,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_sample.c,v 3.1 2003/09/18 03:01:19 cvs Exp $";
 
 FILE   *fpinput;		/* pointer to input file */
 FILE   *fpoutput;		/* pointer to output file */

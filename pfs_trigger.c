@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_trigger
-*  $Id$
+*  $Id: pfs_trigger.c,v 1.3 2002/04/27 20:24:44 margot Exp $
 *  This program tests the pfs 1 pps and clock signals
 *
 *  usage:
@@ -14,7 +14,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_trigger.c,v $
+   Revision 1.3  2002/04/27 20:24:44  margot
+   Change to EDT driver.
+
    Revision 1.2  2002/04/27 06:44:14  margot
    Updated device filename.
 
@@ -32,7 +35,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_trigger.c,v 1.3 2002/04/27 20:24:44 margot Exp $";
 
 int main(int argc, char **argv)
 {

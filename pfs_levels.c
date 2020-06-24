@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_levels
-*  $Id$
+*  $Id: pfs_levels.c,v 1.3 2002/04/27 20:25:08 margot Exp $
 *  This program sets the programmable attenuators available on some PFS systems
 *
 *  usage:
@@ -14,7 +14,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_levels.c,v $
+   Revision 1.3  2002/04/27 20:25:08  margot
+   Change to EDT driver.
+
    Revision 1.2  2002/04/27 06:43:16  margot
    Updated device filename.
 
@@ -33,7 +36,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_levels.c,v 1.3 2002/04/27 20:25:08 margot Exp $";
 
 void processargs();
 

@@ -1,6 +1,6 @@
 /*******************************************************************************
 *  program pfs_unpack
-*  $Id$
+*  $Id: pfs_unpack.c,v 3.4 2009/11/16 19:07:49 jlm Exp $
 *  This programs unpacks data from the portable fast sampler,
 *  optionally applying a phase rotation to compensate for a frequency offset.
 *  Default output is binary floating point quantities.
@@ -28,7 +28,10 @@
 *******************************************************************************/
 
 /* 
-   $Log$
+   $Log: pfs_unpack.c,v $
+   Revision 3.4  2009/11/16 19:07:49  jlm
+   Added ifdef flag for Mac compilation
+
    Revision 3.3  2007/06/18 20:50:06  jao
    Added option '-o -' & '-' for piping out/in to/from STDOUT & STDIN
 
@@ -104,7 +107,7 @@
 
 /* revision control variable */
 static char const rcsid[] = 
-"$Id$";
+"$Id: pfs_unpack.c,v 3.4 2009/11/16 19:07:49 jlm Exp $";
 
 int     fdoutput;		/* file descriptor for output file */
 int	fdinput;		/* file descriptor for input file */
