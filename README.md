@@ -70,7 +70,7 @@ If you use these programs, please cite the paper describing the instrument: J. L
 
 - Install:
   ```sh
-  make install; make clean
+  make install; make clean; cd ..
   ```
 
 - Run tests:
