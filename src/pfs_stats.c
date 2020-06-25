@@ -73,12 +73,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#ifdef __APPLE__
-#include <fcntl.h>
-#else
-#include <asm/fcntl.h>
-#endif
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include "unpack.h"
 
 /* revision control variable */

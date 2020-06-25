@@ -135,11 +135,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef __APPLE__
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <fcntl.h>
-#else
-#include <asm/fcntl.h>
-#endif
 #include <unistd.h>
 #include "unpack.h"
 #include <fftw3.h>
@@ -227,11 +225,7 @@ int main(int argc, char *argv[])
   open_file(outfile,&fpoutput);
 
   /* open file input */
-#ifndef __APPLE__
-  open_flags = O_RDONLY|O_LARGEFILE;
-#else
   open_flags = O_RDONLY;
-#endif
   if((fdinput = open(infile, open_flags)) < 0 )
     {
       perror("open input file");
