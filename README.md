@@ -68,6 +68,11 @@ If you use these programs, please cite the paper describing the instrument: J. L
   cd src; make  
   ```
 
+- Run tests:
+  ```sh
+  make tests  
+  ```
+
 - Install:
   ```sh
   make install; make clean
