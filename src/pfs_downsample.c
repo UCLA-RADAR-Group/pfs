@@ -447,7 +447,7 @@ void *read_buf (void *rdata) {
     /* read one buffer */
     if        ((rbuf->bytesread = read (fdinput, rbuf->bfrthr1, bufsize)) == -1) {
 	perror("read");
-	return;
+	return NULL;
     /* 03/05/04 SWJ - need more data from next data file? */
     } else if (rbuf->bytesread != bufsize && allfiles == 1) {
 	close (fdinput);
@@ -459,16 +459,16 @@ void *read_buf (void *rdata) {
 	/* we assume that if the file with the next extension does not exist, 
 	   we have reached the end */
 	if ((fdinput = open(infile, open_rflags)) < 0) {
-	    return;
+	    return NULL;
 	} else if (fstat (fdinput, &filestat) < 0) {
 	    perror("fstat");
-	    return;
+	    return NULL;
 	}
 
 	/* make up the data buffer */
     	if ((datasz = read (fdinput, rbuf->bfrthr1 + rbuf->bytesread, bufsize - rbuf->bytesread )) == -1) {
 	    perror ("read");
-	    return;
+	    return NULL;
 	} else {
 	    rbuf->bytesread = datasz + rbuf->bytesread;
 	} 
@@ -642,7 +642,7 @@ void *iq_downsample (void *pdata)
       free(x);
     }
 
-  return;
+  return NULL;
 }    
 
 
