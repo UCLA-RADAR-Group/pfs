@@ -151,27 +151,15 @@ int main(int argc, char *argv[])
   copy_cmd_line(argc,argv,command_line);
 
   /* open file input */
-#ifndef __APPLE__
   if (infile[0] == '-')
-    fdinput=0;
-  else if((fdinput = open(infile, O_RDONLY|O_LARGEFILE)) < 0 )
-    perror("open input file");
-
-  if (outfile[0] == '-')
-    fdoutput=1;
-  else if((fdoutput = open(outfile, O_WRONLY|O_CREAT|O_LARGEFILE, 0644)) < 0 )
-    perror("open output file");
-#else
-  if (infile[0] == '-')
-    fdinput=1;
+    fdinput=STDIN_FILENO;
   else if((fdinput = open(infile, O_RDONLY)) < 0 )
     perror("open input file");
 
   if (outfile[0] == '-')
-    fdoutput=1;
+    fdoutput=STDOUT_FILENO;
   else if((fdoutput = open(outfile, O_WRONLY|O_CREAT, 0644)) < 0 )
     perror("open output file");
-#endif
 
   /* check file size */
   if (fstat (fdinput, &filestat) < 0)

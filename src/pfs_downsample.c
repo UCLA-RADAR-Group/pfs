@@ -224,12 +224,7 @@ int main(int argc, char *argv[])
     }
 
   /* open input file */
-#ifndef __APPLE__
-  open_rflags = O_RDONLY|O_LARGEFILE;
-#else
   open_rflags = O_RDONLY;
-#endif
-
   if((fdinput = open(infile, open_rflags)) < 0 )
     {
       perror("open input file");
@@ -283,14 +278,9 @@ int main(int argc, char *argv[])
   }
 
   /* open output file, stdout is default */
-#ifndef __APPLE__
-  open_wflags = O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE;
-#else
   open_wflags = O_RDWR | O_CREAT | O_TRUNC;
-#endif
-
   if (outfile[0] == '-') {
-     fdoutput=1;
+     fdoutput=STDOUT_FILENO;
   } else if ((fdoutput = open(outfile, open_wflags, 0660)) < 0 )
   {
      perror("open input file");
