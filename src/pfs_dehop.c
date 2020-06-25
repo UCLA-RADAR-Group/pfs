@@ -65,7 +65,6 @@
 #include <asm/fcntl.h>
 #endif
 #include "unpack.h"
-#include <fftw.h>
 
 /* revision control variable */
 static char const rcsid[] = 
