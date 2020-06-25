@@ -68,14 +68,14 @@ If you use these programs, please cite the paper describing the instrument: J. L
   cd src; make  
   ```
 
-- Run tests:
-  ```sh
-  make tests  
-  ```
-
 - Install:
   ```sh
   make install; make clean
+  ```
+
+- Run tests:
+  ```sh
+  cd tests; make
   ```
 
 - Successfully tested on CentOS 7.3.1611/7.5.1804, MacOS 10.11.6.
