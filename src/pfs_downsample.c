@@ -250,10 +250,10 @@ int main(int argc, char *argv[])
   /* test size compatibility */
   if (filestat.st_size % 4 != 0)
     if (verbose) fprintf(stderr,"Warning: file size %lld is not a multiple of 4\n", 
-			 filestat.st_size);
+			 (long long int) filestat.st_size);
   if (filestat.st_size % downsample != 0)
     if (verbose) fprintf(stderr,"Warning: file size %lld not a multiple of dwnsmplng factor\n",
-			 filestat.st_size);
+			 (long long int) filestat.st_size);
 
   /* skip samples if needed */
   /* but skip along 4-byte boundaries only */
@@ -280,10 +280,10 @@ int main(int argc, char *argv[])
     /* test new size compatibility */
     if ((filestat.st_size - (int) bytestoskip) % 4 != 0)
       if (verbose) fprintf(stderr,"Warning: file size %lld with %.1f byte skip not a multiple of 4\n",
-			   filestat.st_size, bytestoskip);
+			   (long long int) filestat.st_size, bytestoskip);
     if ((filestat.st_size - (int) bytestoskip) % downsample != 0)
       if (verbose) fprintf(stderr,"Warning: file size %lld with %.1f byte skip not a multiple of dwnsmplng factor\n", 
-			   filestat.st_size, bytestoskip);
+			   (long long int) filestat.st_size, bytestoskip);
   }
 
   /* open output file, stdout is default */

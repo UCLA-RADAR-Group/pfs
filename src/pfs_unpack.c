@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
     }
   if (filestat.st_size % 4 != 0)
     fprintf(stderr,"Warning: file size %d is not a multiple of 4\n",
-	    filestat.st_size);
+	    (int) filestat.st_size);
 
   switch (mode)
     {

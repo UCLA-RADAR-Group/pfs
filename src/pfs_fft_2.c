@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
   float nskipseconds;     /* optional number of seconds to skip at beginning of file */
-  int nskipbytes;	/* number of bytes to skip at beginning of file */
+  long nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
   
   fftwf_plan p1;
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
   if (rmsmin != 0 || rmsmax != 0)
     fprintf(stderr,"Scaling to rms power between   : [%e,%e] Hz\n\n",rmsmin,rmsmax);
 
-  fprintf(stderr,"Data required for one transform: %d bytes\n",bufsize);
+  fprintf(stderr,"Data required for one transform: %ld bytes\n",bufsize);
   fprintf(stderr,"Number of transforms to add    : %qd\n",sum);
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
   if (nskipseconds != 0)
     {
       fprintf(stderr,"Skipping from BOF              : %f seconds\n",nskipseconds);
-      fprintf(stderr,"Skipping from BOF              : %qd bytes\n",nskipbytes);
+      fprintf(stderr,"Skipping from BOF              : %ld bytes\n",nskipbytes);
     }
   if (chebfile[0] != '-')
     fprintf(stderr, "Degree of Chebyshev polynomial : %d\n",degree);    
@@ -231,12 +231,12 @@ int main(int argc, char *argv[])
   /* fsamp samples per second during nskipseconds, and 4/smpwd bytes per complex sample */
   if (nskipbytes != lseek(fdinput1, nskipbytes, SEEK_SET))
     {
-      fprintf(stderr,"Read error while skipping %d bytes.  Check file size.\n",nskipbytes);
+      fprintf(stderr,"Read error while skipping %ld bytes.  Check file size.\n",nskipbytes);
       exit(1);
     }
   if (nskipbytes != lseek(fdinput2, nskipbytes, SEEK_SET))
     {
-      fprintf(stderr,"Read error while skipping %d bytes.  Check file size.\n",nskipbytes);
+      fprintf(stderr,"Read error while skipping %ld bytes.  Check file size.\n",nskipbytes);
       exit(1);
     }
 
@@ -289,13 +289,13 @@ int main(int argc, char *argv[])
       /* read one data buffer       */
       if (bufsize != read(fdinput1, buffer1, bufsize))
 	{
-	  fprintf(stderr,"Read error or EOF %d\n");
+	  fprintf(stderr,"Read error or EOF.\n");
 	  if (timeseries) fprintf(stderr,"Wrote %d transforms\n",counter);
 	  exit(1);
 	}
       if (bufsize != read(fdinput2, buffer2, bufsize))
 	{
-	  fprintf(stderr,"Read error or EOF %d\n");
+	  fprintf(stderr,"Read error or EOF.\n");
 	  if (timeseries) fprintf(stderr,"Wrote %d transforms\n",counter);
 	  exit(1);
 	}
