@@ -84,7 +84,10 @@ More information is available at the [PFS project webpage](https://seti.ucla.edu
 # Credits
 Most of the software was written by Jean-Luc Margot, with some contributions from Jeff Hagen and Joseph Jao.
 
+# Further reading  
+Additional information about planetary radar astronomy can be found at [http://radarastronomy.org](http://radarastronomy.org).
 
+# Contact  
 Please send comments and bug reports to:  
 
 Jean-Luc Margot  
