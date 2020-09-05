@@ -754,7 +754,7 @@ int 	*samplestoskip;
       arg_count += 1;
       break;
 
-    case 'i':
+    case 'x':
       swapiq = 1;
       arg_count += 1;
       break;
