@@ -218,6 +218,7 @@ int main(int argc, char *argv[])
     case  3:  smpwd = 2; maxunpack = +255; break; 
     case  5:  smpwd = 4; maxunpack =   +3; break;
     case  6:  smpwd = 2; maxunpack =  +15; break;
+    case  7:  smpwd = 1; maxunpack = +255; break;
     case  8:  smpwd = 2; maxunpack = +255; break;
     case 32:  smpwd = 0.5; maxunpack = +255; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
@@ -503,6 +504,13 @@ void *proc_buf (void *pdata) {
             unpack_pfs_4c4b_lcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
           } else {
             unpack_pfs_4c4b_rcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+	  }
+          break;
+        case 7:
+	  if (chan == 2) {
+	    unpack_pfs_4c8b_lcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
+	  } else {
+	    unpack_pfs_4c8b_rcp (pbuf->bfrthr2, pbuf->chnthr2, bufsize);
 	  }
           break;
         case 8:
