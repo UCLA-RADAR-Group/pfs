@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
   float maxunpack;	/* maximum unpacked value from libunpack */
   float maxvalue;	/* maximum achievable value by downsampling */
   float fudge;		/* scale fudge factor */
-  int samplestoskip;	/* number of complex samples to skip */
+  long samplestoskip;	/* number of complex samples to skip */
   int i;
 
   char   *outfile;	/* output file name */
@@ -668,7 +668,7 @@ int     *chan;
 float   *dcoffi;
 float   *dcoffq;
 float   *fudge;
-int 	*samplestoskip;
+long 	*samplestoskip;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_downsample program:
@@ -765,7 +765,7 @@ int 	*samplestoskip;
       break;
 
     case 's':
-      sscanf(optarg,"%d",samplestoskip);
+      sscanf(optarg,"%ld",samplestoskip);
       arg_count += 2;           /* two command line arguments */
       break;
   
