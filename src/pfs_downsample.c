@@ -254,14 +254,14 @@ int main(int argc, char *argv[])
   {
     wordstoskip = samplestoskip / smpwd;
     bytestoskip = wordstoskip * 4;
-    if (verbose) fprintf(stderr, "Skipping %d complex samples, equivalent to %.1f words, equivalent to %.1f bytes\n", 
+    if (verbose) fprintf(stderr, "Skipping %ld complex samples, equivalent to %.1f words, equivalent to %.1f bytes\n", 
 			 samplestoskip, wordstoskip, bytestoskip);
     
     /* skip desired amount of bytes */
-    if ((int) bytestoskip != lseek(fdinput, (int) bytestoskip, SEEK_SET))
+    if ((long) bytestoskip != lseek(fdinput, (long) bytestoskip, SEEK_SET))
       {
         perror("lseek");
-        fprintf(stderr, "Unable to skip %d bytes\n", (int) bytestoskip);
+        fprintf(stderr, "Unable to skip %ld bytes\n", (long) bytestoskip);
         exit(1);
       }
 
