@@ -4,7 +4,7 @@ Portable Fast Sampler Software
 These programs control the operation of the Portable Fast Sampler (PFS) systems.  They also provide tools for initial data analysis (unpacking, digital filtering, spectral analysis, de-hopping, etc).  The code includes more than 8,000 lines of C code.  Most of this code has been incorporated in the code that is used to operate and process data from the NASA JPL radar backend.
 
 
-If you use these programs, please cite the paper that describes the instrument: J. L. Margot, A Data-Taking System for Planetary Radar Applications, J. Astron. Instrum., 2020 ([PDF](https://ucla.box.com/s/t7mc5cflclor6si3kaqfqz46pxdlmjqc), [BibTeX](/pfs.bib)).
+If you use these programs, please cite the paper that describes the instrument: J. L. Margot, A Data-Taking System for Planetary Radar Applications, J. Astron. Instrum., https://doi.org/10.1142/S225117172150001X, 2020 ([PDF](https://ucla.box.com/s/t7mc5cflclor6si3kaqfqz46pxdlmjqc), [BibTeX](/pfs.bib)).
 
 # Requirements
 
