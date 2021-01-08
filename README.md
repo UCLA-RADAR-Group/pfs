@@ -86,7 +86,7 @@ Download a [users guide](https://seti.ucla.edu/jlm/research/pfs/pfs_usage.pdf).
 More information is available at the [PFS project webpage](https://seti.ucla.edu/jlm/research/pfs/).  
 
 # Credits
-Most of the software was written by Jean-Luc Margot, with some contributions from Jeff Hagen and Joseph Jao.
+Most of the software was written by Jean-Luc Margot, with software contributions from Jeff Hagen and Joseph Jao.  The design and construction of the first data-taking systems was funded by the National Astronomy and Ionosphere Center.
 
 # Further reading  
 Additional information about planetary radar astronomy can be found at [http://radarastronomy.org](http://radarastronomy.org).
