@@ -1,10 +1,9 @@
 Portable Fast Sampler Software
 ====================================
 
-These programs control the operation of the Portable Fast Sampler (PFS) systems.  They also provide tools for initial data analysis (unpacking, digital filtering, spectral analysis, de-hopping, etc).  The code includes more than 8,000 lines of C code.  Most of this code has been incorporated in the code that is used to operate and process data from the NASA JPL radar backend.
+These programs control the operation of the Portable Fast Sampler (PFS) systems that were in use at Arecibo (2000–2020), Goldstone (2001–2014), and Green Bank (2001–2017).  They also provide tools for initial data analysis (unpacking, digital filtering, spectral analysis, de-hopping, etc).  The code includes more than 8,000 lines of C code.  A substantial fraction of this code has been incorporated in the software that is used to operate and process data from the NASA JPL dual channel agilent receiver (DCAR) data-taking systems installed at Goldstone and Green Bank.
 
-
-If you use these programs, please cite the paper that describes the instrument: J. L. Margot, [A Data-Taking System for Planetary Radar Applications](https://doi.org/10.1142/S225117172150001X), J. Astron. Instrum., <b>10</b>, 2021, ([PDF](https://ucla.box.com/s/t7mc5cflclor6si3kaqfqz46pxdlmjqc), [BibTeX](/pfs.bib)).
+If you use this code, please cite the corresponding paper: J. L. Margot, [A Data-Taking System for Planetary Radar Applications](https://doi.org/10.1142/S225117172150001X), J. Astron. Instrum., <b>10</b>, 2021, ([PDF](https://ucla.box.com/s/t7mc5cflclor6si3kaqfqz46pxdlmjqc), [BibTeX](/pfs.bib)).
 
 # Requirements
 
