@@ -8,9 +8,9 @@ CFLAGS  = -I../include -I/opt/local/include -O3 -DLARGEFILE -D_FILE_OFFSET_BITS=
 LDFLAGS = -L/opt/local/lib -lm
 #
 #
-PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes 
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes pfs_r2c
 DTPROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
-OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o multifile.o libunpack.o
+OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o pfs_r2c.o multifile.o libunpack.o
 DTOBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
 #
 #
@@ -110,6 +110,14 @@ pfs_fft_2 : pfs_fft_2.o
 	$(LDFLAGS) \
 	-o pfs_fft_2
 #
+# pfs_r2c changes from real sampling to IQ sampling via fft
+#
+pfs_r2c : pfs_r2c.o 
+	$(CC) pfs_r2c.o \
+	-lfftw3f \
+	$(LDFLAGS) \
+	-o pfs_r2c
+#
 # pfs_dehop dehops fft spectra
 #
 pfs_dehop : pfs_dehop.o 
@@ -136,7 +144,8 @@ pfs_stats.o:	 pfs_stats.c ;	   $(CC) $(CFLAGS) -c pfs_stats.c
 pfs_unpack.o:    pfs_unpack.c ;    $(CC) $(CFLAGS) -c pfs_unpack.c 
 pfs_downsample.o:pfs_downsample.c ;$(CC) $(CFLAGS) -c pfs_downsample.c 
 pfs_fft.o:	 pfs_fft.c ;	   $(CC) $(CFLAGS) -c pfs_fft.c
-pfs_fft_2.o:	 pfs_fft_2.c ;	   $(CC) $(CFLAGS) -c pfs_fft_2.c 
+pfs_fft_2.o:	 pfs_fft_2.c ;	   $(CC) $(CFLAGS) -c pfs_fft_2.c
+pfs_r2c.o:	 pfs_r2c.c ;	   $(CC) $(CFLAGS) -c pfs_r2c.c 
 pfs_dehop.o:	 pfs_dehop.c ;     $(CC) $(CFLAGS) -c pfs_dehop.c 
 pfs_skipbytes.o: pfs_skipbytes.c ; $(CC) $(CFLAGS) -c pfs_skipbytes.c 
 multifile.o:	 multifile.c ;     $(CC) $(CFLAGS) -c multifile.c
