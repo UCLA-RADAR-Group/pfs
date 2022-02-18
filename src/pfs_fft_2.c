@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
   fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
   
-  nskipbytes = (int) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
+  nskipbytes = (long) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
   if (nskipseconds != 0)
     {
       fprintf(stderr,"Skipping from BOF              : %f seconds\n",nskipseconds);
