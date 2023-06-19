@@ -21,6 +21,7 @@
 *              [-H apply Hanning window before transform]
 *              [-C file of Chebyshev polynomial coefficients defining window to apply after transform] 
 *              [-S number of seconds to skip before applying first FFT]
+*              [-h fch1, write output in HDF5 format with starting frequency fch1 (MHz)]
 *              [-o outfile] [infile]
 *
 *  input:
@@ -68,10 +69,13 @@
 #include <unistd.h>
 #include "unpack.h"
 #include <fftw3.h>
+#include <hdf5.h>
 
 /* revision control variable */
 static char const rcsid[] = 
 "$Id: pfs_fft_2.c,v 4.2 2020/05/21 17:47:53 jlm Exp $";
+
+#define UNDEFINED 0.987654321
 
 FILE   *fpoutput;		/* pointer to output file */
 int	fdinput1;		/* file descriptor for input file 1 */
@@ -96,6 +100,8 @@ void zerofill(float *data, int len);
 int  no_comma_in_string();	
 double chebeval(double x, double c[], int degree);
 int  read_cheb_coeffs(char *chebfile, double *chebcoeff);
+hid_t createHDF5File(const char* filename, size_t rows, size_t cols, double tsum, double freqres, double fch1);
+void writeFloatLineToHDF5(hid_t dataset_id, const float* line_data, size_t current_row, size_t cols);
 
 int main(int argc, char *argv[])
 {
@@ -130,18 +136,22 @@ int main(int argc, char *argv[])
   double sigma,sigma1;	/* needed for rms computation */
   int downsample;	/* downsampling factor, dimensionless */
   long long sum;	/* number of transforms to add, dimensionless */
+  double tsum;		/* integration time for one sum */
   int timeseries;	/* process as time series, boolean */
   int dB;		/* write out results in dB */
   int fftlen;		/* transform length, complex samples */
+  int fftout;		/* number of output (summed) transforms */
   int chan;		/* channel to process (1 or 2) for dual pol data */
   int counter=0;	/* keeps track of number of transforms written */
   int open_flags;	/* flags required for open() call */
   int invert;		/* swap i and q before fft routine */
   int hanning;		/* apply Hanning window before fft routine */
+  double hdf5;		/* write output file in HDF5 format with starting frequency fch1 (Hz) */
   int swap = 1;		/* swap frequencies at output of fft routine */
   int binary;		/* write output as binary floating point quantities */
   float nskipseconds;     /* optional number of seconds to skip at beginning of file */
   long nskipbytes;	/* number of bytes to skip at beginning of file */
+  long long inbytes;	/* size of input file in bytes */
   int imin,imax;	/* indices for rms calculation */
   
   fftwf_plan p1;
@@ -149,14 +159,14 @@ int main(int argc, char *argv[])
   int i,j,k,l,n,n1;
   short x;
 
+  hid_t dataset_id;
+  struct stat fileStat;
+
   /* get the command line arguments */
-  processargs(argc,argv,&infile1,&infile2,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds);
+  processargs(argc,argv,&infile1,&infile2,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&hdf5,&chebfile,&nskipseconds);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
-
-  /* open output file, stdout default */
-  open_file(outfile,&fpoutput);
 
   /* open file input */
   open_flags = O_RDONLY;
@@ -170,6 +180,11 @@ int main(int argc, char *argv[])
       perror("open input file");
       exit(1);
     }
+  if (fstat(fdinput1, &fileStat) == -1) {
+      perror("fstat input file");
+      exit(1);
+    }
+  inbytes = fileStat.st_size;
 
   /* read Cheb coefficients, if requested */
   if (chebfile[0] != '-') 
@@ -180,22 +195,33 @@ int main(int argc, char *argv[])
 
   switch (mode)
     {
-    case  -1: smpwd = 8; break;  
+    case  -1: smpwd = 8; break;
     case   1: smpwd = 8; break;
     case   2: smpwd = 4; break;
-    case   3: smpwd = 2; break; 
+    case   3: smpwd = 2; break;
     case   5: smpwd = 4; break;
     case   6: smpwd = 2; break;
-    case   8: smpwd = 2; break; 
-    case  16: smpwd = 1; break; 
-    case  32: smpwd = 0.5; break; 
+    case   8: smpwd = 2; break;
+    case  16: smpwd = 1; break;
+    case  32: smpwd = 0.5; break;
     default: fprintf(stderr,"Invalid mode\n"); exit(1);
     }
 
   /* compute transform parameters */
   fftlen = (int) rint(fsamp / freqres * 1e6);
-  bufsize = fftlen * 4 / smpwd; 
+  bufsize = fftlen * 4 / smpwd;
   fftlen = fftlen / downsample;
+  tsum = sum / freqres;
+
+  /* compute number of output transforms */
+  nskipbytes = (long) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
+  fftout = (inbytes - nskipbytes) / bufsize / sum;
+
+  /* open output file, stdout default */
+  if (hdf5 == UNDEFINED)
+    open_file(outfile,&fpoutput);
+  else
+    dataset_id = createHDF5File(outfile, fftout, fftlen, tsum, freqres, hdf5);
 
   /* describe what we are doing */
   fprintf(stderr,"\n%s\n\n",command_line);
@@ -208,16 +234,17 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Data required for one transform: %ld bytes\n",bufsize);
   fprintf(stderr,"Number of transforms to add    : %qd\n",sum);
   fprintf(stderr,"Data required for one sum      : %qd bytes\n",sum * bufsize);
-  fprintf(stderr,"Integration time for one sum   : %e s\n",sum / freqres);
-  
-  nskipbytes = (long) rint(fsamp * 1e6 * nskipseconds * 4.0 / smpwd);
+  fprintf(stderr,"Integration time for one sum   : %e s\n",tsum);
+
   if (nskipseconds != 0)
     {
       fprintf(stderr,"Skipping from BOF              : %f seconds\n",nskipseconds);
       fprintf(stderr,"Skipping from BOF              : %ld bytes\n",nskipbytes);
     }
+  fprintf(stderr,"Number of output (summed) ffts : %qd\n",fftout);
+
   if (chebfile[0] != '-')
-    fprintf(stderr, "Degree of Chebyshev polynomial : %d\n",degree);    
+    fprintf(stderr, "Degree of Chebyshev polynomial : %d\n",degree);
   /* for (i = 0; i <= degree; i++) fprintf(stderr, "%d %lf\n", i, chebcoeff[i]); */
   fprintf(stderr,"\n");
     
@@ -259,7 +286,7 @@ int main(int argc, char *argv[])
   lcp   = (char *)  malloc(2 * nsamples * sizeof(char));
   if (!buffer2 || !fftinbuf2 || !fftoutbuf2 || !total || !rcp || !lcp)
     {
-      fprintf(stderr,"Malloc error\n"); 
+      fprintf(stderr,"Malloc error\n");
       exit(1);
     }
 
@@ -299,7 +326,7 @@ int main(int argc, char *argv[])
 	{
 	case 1:
 	  unpack_pfs_2c2b(buffer1, rcp, bufsize);
-	  unpack_pfs_2c2b(buffer2, lcp, bufsize); 
+	  unpack_pfs_2c2b(buffer2, lcp, bufsize);
 	  break;
 	case 2: 
 	  unpack_pfs_2c4b(buffer1, rcp, bufsize);
@@ -335,7 +362,7 @@ int main(int argc, char *argv[])
 	  memcpy(fftinbuf2,buffer2,bufsize);
 	  break;
 	default: 
-	  fprintf(stderr,"Mode not implemented yet\n"); 
+	  fprintf(stderr,"Mode not implemented yet\n");
 	  exit(-1);
 	}
 
@@ -354,13 +381,13 @@ int main(int argc, char *argv[])
 
       /* transform, swap, and compute power */
       if (invert) swap_iandq(fftinbuf1,fftlen);
-      if (invert) swap_iandq(fftinbuf2,fftlen); 
+      if (invert) swap_iandq(fftinbuf2,fftlen);
       if (hanning) vector_window(fftinbuf1,fftlen);
       if (hanning) vector_window(fftinbuf2,fftlen);
-      fftwf_execute(p1); 
-      fftwf_execute(p2); 
+      fftwf_execute(p1);
+      fftwf_execute(p2);
       if (swap) swap_freq(fftoutbuf1,fftlen);
-      if (swap) swap_freq(fftoutbuf2,fftlen); 
+      if (swap) swap_freq(fftoutbuf2,fftlen);
       vector_power(fftoutbuf1,fftlen);
       vector_power(fftoutbuf2,fftlen);
       
@@ -374,7 +401,7 @@ int main(int argc, char *argv[])
   
   /* set DC to average of neighboring values  */
   total1[fftlen/2] = (total1[fftlen/2-1]+total1[fftlen/2+1]) / 2.0;
-  total2[fftlen/2] = (total2[fftlen/2-1]+total2[fftlen/2+1]) / 2.0; 
+  total2[fftlen/2] = (total2[fftlen/2-1]+total2[fftlen/2+1]) / 2.0;
 
   /* sum powers */
   for (j = 0; j < fftlen; j++)
@@ -389,8 +416,8 @@ int main(int argc, char *argv[])
   if (rmsmin != 0 || rmsmax != 0)
     {
       /* identify relevant indices for rms power computation */
-      imin = fftlen/2 + rmsmin/freqres; 
-      imax = fftlen/2 + rmsmax/freqres; 
+      imin = fftlen/2 + rmsmin/freqres;
+      imax = fftlen/2 + rmsmax/freqres;
       mean1 = var1 = 0;
       n1 = 0;
       for (i = imin; i < imax; i++)
@@ -428,9 +455,17 @@ int main(int argc, char *argv[])
   if (timeseries)
     {
       for (i = 0; i < fftlen; i++) total[i] = (total[i]-mean)/sigma;
-      if (fftlen != fwrite(total,sizeof(float),fftlen,fpoutput))
-	fprintf(stderr,"Write error\n");
-      fflush(fpoutput);
+      if (hdf5 == UNDEFINED)
+	{
+	  if (fftlen != fwrite(total,sizeof(float),fftlen,fpoutput))
+	    fprintf(stderr,"Write error\n");
+	  fflush(fpoutput);
+	}
+      else
+	{
+	  if (counter < fftout)
+	    writeFloatLineToHDF5(dataset_id, total, counter, fftlen);
+	}
       counter++;
       goto loop;
     }
@@ -447,12 +482,27 @@ int main(int argc, char *argv[])
 	    if (dB) value = 10*log10(value);
 
 	    if (binary)
-	      fwrite(&value,sizeof(float),1,fpoutput);
+	      if (hdf5 == UNDEFINED)
+		fwrite(&value,sizeof(float),1,fpoutput);
+	      else
+		/* writeFloatValueToHDF5(dataset_id, &value); */
+		fprintf(stderr, "Writing a single transform to HDF5 is not implemented yet.  Try with -t -n 1.\n");
 	    else
-	      fprintf(fpoutput,"% .3f % .3e\n",freq,value);  
+	      fprintf(fpoutput,"% .3f % .3e\n",freq,value);
 	  }
       }
 
+  /* close files */
+  if (hdf5 == UNDEFINED)
+    {
+      fclose(fpoutput);
+    }
+  else
+    {
+      H5Dclose(dataset_id);
+      H5Fclose(H5Iget_file_id(dataset_id));
+    }
+  
   fftwf_destroy_plan(p1);
   fftwf_destroy_plan(p2);
   free(fftinbuf1);
@@ -461,6 +511,262 @@ int main(int argc, char *argv[])
   free(fftoutbuf2);
   
   return 0;
+}
+
+/******************************************************************************/
+/*	writeFloatLineToHDF5						      */
+/******************************************************************************/
+void writeFloatLineToHDF5(hid_t dataset_id, const float* line_data, size_t current_row, size_t cols)
+{
+  hid_t dataspace_id, memspace_id;
+  herr_t status;
+
+  // Get the dataspace for the dataset
+  dataspace_id = H5Dget_space(dataset_id);
+
+  // Select the hyperslab for the new line
+  hsize_t offset[3] = {current_row, 0, 0};
+  hsize_t count[3] = {1, 1, cols};
+  status = H5Sselect_hyperslab(dataspace_id, H5S_SELECT_SET, offset, NULL, count, NULL);
+  if (status < 0)
+    {
+      fprintf(stderr,"HDF5 select hyperslab failed with error code %d\n", status);
+      exit(1);
+    }
+
+  // Create the memory dataspace for the line of data
+  hsize_t mem_dims[3] = {1, 1, cols};
+  memspace_id = H5Screate_simple(3, mem_dims, NULL);
+
+  // Write the line data to the dataset
+  status = H5Dwrite(dataset_id, H5T_NATIVE_FLOAT, memspace_id, dataspace_id, H5P_DEFAULT, line_data);
+  if (status < 0)
+    {
+      fprintf(stderr,"HDF5 write failed with error code %d\n", status);
+      exit(1);
+    }
+
+  // Close resources
+  H5Sclose(dataspace_id);
+}
+
+/******************************************************************************/
+/*	createHDF5File							      */
+/******************************************************************************/
+/* The structure and attributes of this HDF5 file are odd.
+   They are meant to replicate Breakthrough Listen dynamic spectra. */
+hid_t createHDF5File(const char* filename, size_t rows, size_t cols, double tsum, double freqres, double fch1)
+{
+  hid_t file_id, dataspace_id, dataset_id, attribute_id, attribute_type_id;
+    int status;
+
+    // Create a new HDF5 file
+    file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Create the dataspace for the dataset
+    int rank = 3;
+    hsize_t dims[3] = {rows, 1, cols};
+    dataspace_id = H5Screate_simple(rank, dims, NULL);
+
+    // Create the dataset
+    dataset_id = H5Dcreate2(file_id, "/data", H5T_NATIVE_FLOAT, dataspace_id,
+			    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Create a scalar dataspace for the attributes
+    dataspace_id = H5Screate(H5S_SCALAR);
+
+    // Create the "nchans" attribute
+    attribute_type_id = H5T_STD_I64LE;
+    attribute_id = H5Acreate2(dataset_id, "nchans", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "nchans" attribute value
+    int64_t nchans_attribute_value = cols;
+    H5Awrite(attribute_id, attribute_type_id, &nchans_attribute_value);
+
+    // Close the "nchans" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "nbits" attribute
+    attribute_type_id = H5T_STD_I64LE;
+    attribute_id = H5Acreate2(dataset_id, "nbits", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "nbits" attribute value
+    int64_t nbits_attribute_value = 32;
+    H5Awrite(attribute_id, attribute_type_id, &nbits_attribute_value);
+
+    // Close the "nbits" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "data_type" attribute
+    attribute_type_id = H5T_STD_I64LE;
+    attribute_id = H5Acreate2(dataset_id, "data_type", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "data_type" attribute value
+    int64_t data_type_attribute_value = 1;
+    H5Awrite(attribute_id, attribute_type_id, &data_type_attribute_value);
+
+    // Close the "data_type" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "fch1" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "fch1", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "fch1" attribute value
+    // Example values 1701.5625 for VEGAS band C channel 0, 1601.5625 for VEGAS band D channel 0
+    double fch1_attribute_value = fch1;
+    H5Awrite(attribute_id, attribute_type_id, &fch1_attribute_value);
+
+    // Close the "fch1" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "foff" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "foff", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "foff" attribute value
+    double foff_attribute_value = -freqres / 1e6; /* must be in MHz to match fch1 units */
+    H5Awrite(attribute_id, attribute_type_id, &foff_attribute_value);
+
+    // Close the "foff" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "tsamp" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "tsamp", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "tsamp" attribute value
+    double tsamp_attribute_value = tsum;
+    H5Awrite(attribute_id, attribute_type_id, &tsamp_attribute_value);
+
+    // Close the "tsamp" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "tstart" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "tstart", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "tstart" attribute value
+    double tstart_attribute_value = 59332.933969907404;
+    H5Awrite(attribute_id, attribute_type_id, &tstart_attribute_value);
+
+    // Close the "tstart" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "nifs" attribute
+    attribute_type_id = H5T_STD_I64LE;
+    attribute_id = H5Acreate2(dataset_id, "nifs", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "nifs" attribute value
+    int64_t nifs_attribute_value = 1;
+    H5Awrite(attribute_id, attribute_type_id, &nifs_attribute_value);
+
+    // Close the "nifs" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "telescope_id" attribute
+    attribute_type_id = H5T_STD_I64LE;
+    attribute_id = H5Acreate2(dataset_id, "telescope_id", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the "telescope_id" attribute value
+    int64_t telescope_id_attribute_value = 6; /* for GBT */
+    H5Awrite(attribute_id, attribute_type_id, &telescope_id_attribute_value);
+
+    // Close the "telescope_id" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "src_dej" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "src_dej", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    // Write the "src_dej" attribute value
+    double src_dej_attribute_value = 0.0;
+    H5Awrite(attribute_id, attribute_type_id, &src_dej_attribute_value);
+
+    // Close the "src_dej" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the "src_raj" attribute
+    attribute_type_id = H5T_IEEE_F64LE;
+    attribute_id = H5Acreate2(dataset_id, "src_raj", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+    // Write the "src_raj" attribute value
+    double src_raj_attribute_value = 0.0;
+    H5Awrite(attribute_id, attribute_type_id, &src_raj_attribute_value);
+
+    // Close the "src_raj" attribute resources
+    H5Aclose(attribute_id);
+
+    // Create the string datatype for the attribute
+    attribute_type_id = H5Tcopy(H5T_C_S1);
+    H5Tset_size(attribute_type_id, H5T_VARIABLE);
+    H5Tset_strpad(attribute_type_id, H5T_STR_NULLTERM);
+    H5Tset_cset(attribute_type_id, H5T_CSET_ASCII);
+
+    // Create the attribute
+    attribute_id = H5Acreate2(file_id, "CLASS", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the attribute value
+    const char* class_attribute_value = "FILTERBANK";
+    H5Awrite(attribute_id, attribute_type_id, &class_attribute_value);
+
+    // Close resources
+    H5Aclose(attribute_id);
+
+    // Create the attribute
+    attribute_id = H5Acreate2(file_id, "VERSION", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the attribute value
+    const char* version_attribute_value = "1.0";
+    H5Awrite(attribute_id, attribute_type_id, &version_attribute_value);
+
+    // Close resources
+    H5Aclose(attribute_id);
+
+    // Create the attribute
+    attribute_id = H5Acreate2(dataset_id, "source_name", attribute_type_id,
+                              dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the attribute value
+    const char* src_attribute_value = "test";
+    H5Awrite(attribute_id, attribute_type_id, &src_attribute_value);
+
+    // Close resources
+    H5Aclose(attribute_id);
+    H5Sclose(dataspace_id);
+
+    // Create a string attribute for the dimension labels
+    const char* col_labels[3] = {"frequency", "feed_id", "time"};
+
+    // Create the dataspace for the dataset
+    rank = 1;
+    hsize_t dim[1] = {3};
+    dataspace_id = H5Screate_simple(rank, dim, NULL);
+
+    // Create the attribute
+    attribute_id = H5Acreate2(dataset_id, "DIMENSION_LABELS", attribute_type_id,
+                                dataspace_id, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write the attribute value
+    H5Awrite(attribute_id, attribute_type_id, col_labels);
+
+    // Close resources
+    H5Aclose(attribute_id);
+    H5Sclose(dataspace_id);
+    H5Tclose(attribute_type_id);
+
+    return dataset_id;
 }
 
 /******************************************************************************/
@@ -537,7 +843,7 @@ double chebeval(double x, double c[], int degree)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile1,infile2,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds)
+void	processargs(argc,argv,infile1,infile2,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,hdf5,chebfile,nskipseconds)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile1;		 /* input file name 1 */
@@ -558,6 +864,7 @@ float   *rmsmax;
 int     *dB;
 int     *invert;
 int     *hanning;
+double  *hdf5;
 char    **chebfile;
 float     *nskipseconds;
 {
@@ -567,13 +874,13 @@ float     *nskipseconds;
 	- the infile name is set from the 1st unoptioned argument
   */
 
-  int getopt();		/* c lib function returns next opt*/ 
+  int getopt();		/* c lib function returns next opt*/
   extern char *optarg; 	/* if arg with option, this pts to it*/
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-H apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] infile1 infile2";
+  char *myoptions = "m:f:d:r:n:tc:h:o:lbx:s:iHC:S:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft_2 -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-H apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-h fch1, write output in HDF5 format with starting frequency fch1 (MHz)] [-o outfile] infile1 infile2";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -595,6 +902,7 @@ float     *nskipseconds;
   *dB = 0;		/* default is linear output */
   *invert = 0;
   *hanning = 0;
+  *hdf5 = UNDEFINED;
   *chebfile = "-";
   *nskipseconds = 0;    /* default is process entire file */
   *freqmin = 0;		/* not set value */
@@ -660,6 +968,12 @@ float     *nskipseconds;
       case 'H':
 	*hanning = 1;
 	arg_count += 1;
+	break;
+
+      case 'h':
+	sscanf(optarg,"%lf",hdf5);
+	*binary = 1;
+	arg_count += 2;
 	break;
 
       case 'C':

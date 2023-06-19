@@ -1,11 +1,12 @@
 #
 #	Makefile to build pfs programs
 #
-SHELL=/bin/csh
+#SHELL=/bin/csh
 CC=gcc
 GLOBDIR=$(HOME)/bin
 CFLAGS  = -I../include -I/opt/local/include -O3 -DLARGEFILE -D_FILE_OFFSET_BITS=64
 LDFLAGS = -L/opt/local/lib -lm
+HDF5FLAGS = -L/usr/lib64/ -lhdf5 
 #
 #
 PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes pfs_r2c
@@ -107,6 +108,7 @@ pfs_fft : pfs_fft.o
 pfs_fft_2 : pfs_fft_2.o 
 	$(CC) pfs_fft_2.o libunpack.o \
 	-lfftw3f \
+	$(HDF5FLAGS) \
 	$(LDFLAGS) \
 	-o pfs_fft_2
 #
