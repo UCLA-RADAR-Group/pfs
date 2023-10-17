@@ -152,6 +152,7 @@ int main(int argc, char *argv[])
     case  3: smpwd = 2; levels = 256; break; 
     case  5: smpwd = 4; levels =   4; break;
     case  6: smpwd = 2; levels =  16; break;
+    case  7: smpwd = 1; levels = 256; break;
     /* A/D levels do not apply for packing modes below */  
     case   8: smpwd =   2; break; 
     case  32: smpwd = 0.5; break; 
@@ -222,6 +223,12 @@ int main(int argc, char *argv[])
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
 	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
 	  break;
+	case 7:
+	  unpack_pfs_4c8b_rcp(buffer, rcp, bufsize);
+	  unpack_pfs_4c8b_lcp(buffer, lcp, bufsize);
+	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
+	  sum(lcp, nsamples, &li, &lq, &lii, &lqq, &liq);
+	  break;
 	case 8: 
 	  memcpy (rcp, buffer, bufsize);
 	  sum(rcp, nsamples, &ri, &rq, &rii, &rqq, &riq);
@@ -262,7 +269,7 @@ int main(int argc, char *argv[])
     fprintf(fpoutput,"In digitizer counts (x2):\n");
   fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
 
-  if (mode == 5 || mode == 6)
+  if (mode == 5 || mode == 6 || mode == 7)
     {
       fprintf(fpoutput,"RCP stats\n");
       fprintf(fpoutput,"% 10.4f % 10.4f ",ri,rii);
@@ -293,7 +300,7 @@ int main(int argc, char *argv[])
   fprintf(fpoutput,"\nIn Volts:\n");
   fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
 
-  if (mode == 5 || mode == 6)
+  if (mode == 5 || mode == 6 || mode == 7)
     {
       fprintf(fpoutput,"RCP stats\n");
       fprintf(fpoutput,"% 10.4f % 10.4f ",ri/levels/2.0,rii/levels/2.0);
@@ -317,7 +324,7 @@ int main(int argc, char *argv[])
   fprintf(fpoutput,"\nIn dBm:\n");
   fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
 
-  if (mode == 5 || mode == 6)
+  if (mode == 5 || mode == 6 || mode ==7)
     {
       fprintf(fpoutput,"RCP stats\n");
       fprintf(fpoutput,"% 10.4f % 10.4f ",0.0,20*log10(rii/levels/2.0)+13);
