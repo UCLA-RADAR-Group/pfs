@@ -247,6 +247,7 @@ int main(int argc, char *argv[])
     case   3: smpwd = 2; break; 
     case   5: smpwd = 4; break;
     case   6: smpwd = 2; break;
+    case   7: smpwd = 1; break;
     case   8: smpwd = 2; break; 
     case  16: smpwd = 1; break; 
     case  32: smpwd = 0.5; break; 
@@ -353,6 +354,10 @@ int main(int argc, char *argv[])
 	case 6: 
 	  if (chan == 2) unpack_pfs_4c4b_lcp (buffer, rcp, bufsize);
 	  else 		 unpack_pfs_4c4b_rcp (buffer, rcp, bufsize);
+	  break;
+	case 7:
+	  if (chan == 2) unpack_pfs_4c8b_lcp (buffer, rcp, bufsize);
+	  else 		 unpack_pfs_4c8b_rcp (buffer, rcp, bufsize);
 	  break;
      	case 8: 
 	  memcpy (rcp, buffer, bufsize);
