@@ -9,7 +9,7 @@ LDFLAGS = -L/opt/local/lib -lm
 HDF5FLAGS = -L/usr/lib64/ -lhdf5 
 #
 #
-PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_fft pfs_fft_2 pfs_dehop pfs_skipbytes pfs_r2c
+PROGRAMS=pfs_hist pfs_stats pfs_unpack pfs_downsample pfs_dehop pfs_skipbytes pfs_r2c pfs_fft pfs_fft_2 
 DTPROGRAMS=pfs_radar pfs_sample pfs_trigger pfs_reset pfs_levels 
 OBJECTS=pfs_hist.o pfs_stats.o pfs_unpack.o pfs_downsample.o pfs_fft.o pfs_fft_2.o pfs_dehop.o pfs_skipbytes.o pfs_r2c.o multifile.o libunpack.o
 DTOBJECTS=pfs_radar.o pfs_sample.o pfs_trigger.o pfs_reset.o pfs_levels.o 
