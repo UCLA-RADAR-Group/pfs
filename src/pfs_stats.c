@@ -94,8 +94,8 @@ void processargs();
 void open_file();
 void copy_cmd_line();
 
-void sum(char *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
-void floatsum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq);
+void sum(char *inbuf, long nsamples, double *i, double *q, double *ii, double *qq, double *iq);
+void floatsum(float *inbuf, long nsamples, double *i, double *q, double *ii, double *qq, double *iq);
 
 int main(int argc, char *argv[])
 {
@@ -107,8 +107,8 @@ int main(int argc, char *argv[])
   float smpwd;		/* # of single pol complex samples in a 4 byte word */
   double ri,rq,rii,rqq,riq;/* accumulators for statistics */
   double li,lq,lii,lqq,liq;/* accumulators for statistics */
-  int nsamples;		/* # of complex samples in each buffer */
-  int ntotal;		/* total number of samples used in computing statistics */
+  long nsamples;		/* # of complex samples in each buffer */
+  long ntotal;		/* total number of samples used in computing statistics */
   int bytesread;	/* number of bytes read from input file */
   int levels;		/* # of levels for given quantization mode */
   int open_flags;	/* flags required for open() call */
@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
     }
 
   /* allocate storage */
-  nsamples = (int) rint(bufsize * smpwd / 4.0);
+  nsamples = (long) rint(bufsize * smpwd / 4.0);
   buffer = (char *) malloc(bufsize);
   rcp = (char *) malloc(2 * nsamples * sizeof(char));
   lcp = (char *) malloc(2 * nsamples * sizeof(char));
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
       if (bytesread != bufsize) 
 	{
 	  bufsize = bytesread;
-	  nsamples = (int) rint(bufsize * smpwd / 4.0);
+	  nsamples = (long) rint(bufsize * smpwd / 4.0);
 	}
 
       switch (mode)
@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
 
   /* print results */
   if (mode > 8) 
-    fprintf(fpoutput,"Statistics on %d samples:\n",ntotal);
+    fprintf(fpoutput,"Statistics on %ld samples:\n",ntotal);
   else
     fprintf(fpoutput,"In digitizer counts (x2):\n");
   fprintf(fpoutput,"     DC I      RMS I       DC Q      RMS Q       rIQ\n");
@@ -349,7 +349,7 @@ int main(int argc, char *argv[])
 /******************************************************************************/
 /*	sum								      */
 /******************************************************************************/
-void sum(char *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
+void sum(char *inbuf, long nsamples, double *i, double *q, double *ii, double *qq, double *iq)
 {
   int k;
 
@@ -369,7 +369,7 @@ void sum(char *inbuf, int nsamples, double *i, double *q, double *ii, double *qq
 /******************************************************************************/
 /* floatsum								      */
 /******************************************************************************/
-void floatsum(float *inbuf, int nsamples, double *i, double *q, double *ii, double *qq, double *iq)
+void floatsum(float *inbuf, long nsamples, double *i, double *q, double *ii, double *qq, double *iq)
 {
   int k;
 
