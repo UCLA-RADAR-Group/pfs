@@ -20,6 +20,7 @@
 *              [-H apply Hanning window before transform]
 *              [-C file of Chebyshev polynomial coefficients defining window to apply after transform] 
 *              [-S number of seconds to skip before applying first FFT]
+*              [-I dcoffi] [-Q dcoffq] 
 *              [-o outfile] [infile]
 *
 *  input:
@@ -210,13 +211,14 @@ int main(int argc, char *argv[])
   float nskipseconds;   /* optional number of seconds to skip at beginning of file */
   long nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
+  float	dcoffi,dcoffq;	/* dc offsets */
   
   fftwf_plan p;
   int i,j,k,l,n,n1;
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds,&dcoffi,&dcoffq);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -376,6 +378,15 @@ int main(int argc, char *argv[])
 	  fprintf(stderr,"Mode not implemented yet\n"); 
 	  exit(-1);
 	}
+
+      /* deal with nonzero DC offsets if provided by user */
+      if (dcoffi != 0 || dcoffq != 0)
+	for (k = 0; k < 2*fftlen; k += 2)
+	  {
+	    fftinbuf[k]   -= dcoffi;
+	    fftinbuf[k+1] -= dcoffq; 
+	  }
+      
 
       /* downsample */
       if (mode != 16 && mode != 32)
@@ -556,7 +567,7 @@ double chebeval(double x, double c[], int degree)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds,dcoffi,dcoffq)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -578,6 +589,8 @@ int     *invert;
 int     *hanning;
 char    **chebfile;
 float   *nskipseconds;
+float   *dcoffi;
+float   *dcoffq;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -590,8 +603,8 @@ float   *nskipseconds;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:I:Q:"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-I dcoffi] [-Q dcoffq] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -618,12 +631,24 @@ float   *nskipseconds;
   *freqmax = 0;		/* not set value */
   *rmsmin  = 0;		/* not set value */
   *rmsmax  = 0;		/* not set value */
+  *dcoffi = 0;
+  *dcoffq = 0;
 
   /* loop over all the options in list */
   while ((c = getopt(argc,argv,myoptions)) != -1)
   { 
     switch (c) 
       {
+      case 'I':
+	sscanf(optarg,"%f",dcoffi);
+	arg_count += 2;           /* two command line arguments */
+	break;
+
+      case 'Q':
+	sscanf(optarg,"%f",dcoffq);
+	arg_count += 2;           /* two command line arguments */
+	break;
+
       case 'o':
 	*outfile = optarg;	/* output file name */
 	arg_count += 2;		/* two command line arguments */
