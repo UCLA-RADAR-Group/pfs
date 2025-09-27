@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
   float nskipseconds;   /* optional number of seconds to skip at beginning of file */
   long nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
-  float	dcoffi,dcoffq;	/* user-provided dc offsets */
+  double dcoffi,dcoffq;	/* user-provided dc offsets */
   int dcoffset=0;	/* compute and remove DC offset prior to FFT */
   
   fftwf_plan p;
@@ -616,8 +616,8 @@ int     *invert;
 int     *hanning;
 char    **chebfile;
 float   *nskipseconds;
-float   *dcoffi;
-float   *dcoffq;
+double  *dcoffi;
+double  *dcoffq;
 int     *dcoffset;
 {
   /* function to process a programs input command line.
@@ -668,12 +668,12 @@ int     *dcoffset;
     switch (c) 
       {
       case 'I':
-	sscanf(optarg,"%f",dcoffi);
+	sscanf(optarg,"%lf",dcoffi);
 	arg_count += 2;           /* two command line arguments */
 	break;
 
       case 'Q':
-	sscanf(optarg,"%f",dcoffq);
+	sscanf(optarg,"%lf",dcoffq);
 	arg_count += 2;           /* two command line arguments */
 	break;
 
