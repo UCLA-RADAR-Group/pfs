@@ -168,6 +168,7 @@ void zerofill(float *data, int len);
 int  no_comma_in_string();	
 double chebeval(double x, double c[], int degree);
 int  read_cheb_coeffs(char *chebfile, double *chebcoeff);
+void average(float *inbuf, int nsamples, double *i, double *q);
 
 int main(int argc, char *argv[])
 {
@@ -211,14 +212,15 @@ int main(int argc, char *argv[])
   float nskipseconds;   /* optional number of seconds to skip at beginning of file */
   long nskipbytes;	/* number of bytes to skip at beginning of file */
   int imin,imax;	/* indices for rms calculation */
-  float	dcoffi,dcoffq;	/* dc offsets */
+  float	dcoffi,dcoffq;	/* user-provided dc offsets */
+  int dcoffset=0;	/* compute and remove DC offset prior to FFT */
   
   fftwf_plan p;
   int i,j,k,l,n,n1;
   short x;
 
   /* get the command line arguments */
-  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds,&dcoffi,&dcoffq);
+  processargs(argc,argv,&infile,&outfile,&mode,&fsamp,&freqres,&downsample,&sum,&binary,&timeseries,&chan,&freqmin,&freqmax,&rmsmin,&rmsmax,&dB,&invert,&hanning,&chebfile,&nskipseconds,&dcoffi,&dcoffq,&dcoffset);
 
   /* save the command line */
   copy_cmd_line(argc,argv,command_line);
@@ -379,7 +381,10 @@ int main(int argc, char *argv[])
 	  exit(-1);
 	}
 
-      /* deal with nonzero DC offsets if provided by user */
+      if (dcoffset)
+	average(fftinbuf, fftlen, &dcoffi, &dcoffq);
+	  
+      /* deal with nonzero DC offsets if provided by user or if option -D was invoked */
       if (dcoffi != 0 || dcoffq != 0)
 	for (k = 0; k < 2*fftlen; k += 2)
 	  {
@@ -387,7 +392,6 @@ int main(int argc, char *argv[])
 	    fftinbuf[k+1] -= dcoffq; 
 	  }
       
-
       /* downsample */
       if (mode != 16 && mode != 32)
 	for (k = 0, l = 0; k < 2*fftlen; k += 2, l += 2*downsample)
@@ -495,6 +499,29 @@ int main(int argc, char *argv[])
 }
 
 /******************************************************************************/
+/*    average         							      */
+/******************************************************************************/
+void average(float *inbuf, int nsamples, double *i, double *q)
+{
+  int k;
+
+  *i = 0;
+  *q = 0;
+  
+  /* sum Is and Qs */
+  for (k = 0; k < 2*nsamples; k += 2)
+    {
+      *i  += inbuf[k];
+      *q  += inbuf[k+1];
+    }
+
+  /* divide by nsamples to get the average value */
+  *i = *i / nsamples;
+  *q = *q / nsamples;
+
+  return;
+}    
+/******************************************************************************/
 /*	vector_window							      */
 /******************************************************************************/
 void vector_window(float *data, int len)
@@ -567,7 +594,7 @@ double chebeval(double x, double c[], int degree)
 /******************************************************************************/
 /*	processargs							      */
 /******************************************************************************/
-void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds,dcoffi,dcoffq)
+void	processargs(argc,argv,infile,outfile,mode,fsamp,freqres,downsample,sum,binary,timeseries,chan,freqmin,freqmax,rmsmin,rmsmax,dB,invert,hanning,chebfile,nskipseconds,dcoffi,dcoffq,dcoffset)
 int	argc;
 char	**argv;			 /* command line arguements */
 char	**infile;		 /* input file name */
@@ -591,6 +618,7 @@ char    **chebfile;
 float   *nskipseconds;
 float   *dcoffi;
 float   *dcoffq;
+int     *dcoffset;
 {
   /* function to process a programs input command line.
      This is a template which has been customised for the pfs_fft program:
@@ -603,8 +631,8 @@ float   *dcoffq;
   extern int optind;	/* after call, ind into argv for next*/
   extern int opterr;    /* if 0, getopt won't output err mesg*/
 
-  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:I:Q:"; /* options to search for :=> argument*/
-  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-I dcoffi] [-Q dcoffq] [-o outfile] [infile]";
+  char *myoptions = "m:f:d:r:n:tc:o:lbx:s:iHC:S:I:Q:D"; /* options to search for :=> argument*/
+  char *USAGE1="pfs_fft -m mode -f sampling frequency (MHz) [-r desired frequency resolution (Hz)] [-d downsampling factor] [-n sum n transforms] [-l (dB output)] [-b (binary output)] [-t time series] [-x freqmin,freqmax (Hz)] [-s scale to sigmas using smin,smax (Hz)] [-c channel (1 or 2)] [-i swap IQ before transform (invert freq axis)] [-w apply Hanning window before transform] [-C file of Chebyshev polynomial coefficients defining window to apply after transform] [-S number of seconds to skip before applying first FFT] [-I dcoffi] [-Q dcoffq] [-D compute and remove DC offset prior to FFT] [-o outfile] [infile]";
   char *USAGE2="Valid modes are\n\t 0: 2c1b (N/A)\n\t 1: 2c2b\n\t 2: 2c4b\n\t 3: 2c8b\n\t 4: 4c1b (N/A)\n\t 5: 4c2b\n\t 6: 4c4b\n\t 7: 4c8b (N/A)\n\t 8: signed bytes\n\t16: signed 16bit\n\t32: 32bit floats\n";
   int  c;			 /* option letter returned by getopt  */
   int  arg_count = 1;		 /* optioned argument count */
@@ -706,6 +734,11 @@ float   *dcoffq;
 
       case 'C':
 	*chebfile = optarg;	/* file name for Cheb coefficients */
+	arg_count += 2;		/* two command line arguments */
+	break;
+
+      case 'D':
+	*dcoffset = 1;		/* compute and remove DC offset prior to FFT */
 	arg_count += 2;		/* two command line arguments */
 	break;
 
