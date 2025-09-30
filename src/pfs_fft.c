@@ -739,7 +739,7 @@ int     *dcoffset;
 
       case 'D':
 	*dcoffset = 1;		/* compute and remove DC offset prior to FFT */
-	arg_count += 2;		/* two command line arguments */
+	arg_count += 1;		/* two command line arguments */
 	break;
 
       case 'b':
