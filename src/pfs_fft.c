@@ -381,17 +381,6 @@ int main(int argc, char *argv[])
 	  exit(-1);
 	}
 
-      if (dcoffset)
-	average(fftinbuf, fftlen, &dcoffi, &dcoffq);
-	  
-      /* deal with nonzero DC offsets if provided by user or if option -D was invoked */
-      if (dcoffi != 0 || dcoffq != 0)
-	for (k = 0; k < 2*fftlen; k += 2)
-	  {
-	    fftinbuf[k]   -= dcoffi;
-	    fftinbuf[k+1] -= dcoffq; 
-	  }
-      
       /* downsample */
       if (mode != 16 && mode != 32)
 	for (k = 0, l = 0; k < 2*fftlen; k += 2, l += 2*downsample)
@@ -403,6 +392,22 @@ int main(int argc, char *argv[])
 	      }
 	  }
 
+      /* compute DC offset if required */
+      if (dcoffset)
+	{
+	  average(fftinbuf, fftlen, &dcoffi, &dcoffq);
+	  /* fprintf(stderr,"DC offsets found: %e %e\n", dcoffi, dcoffq); */
+	}
+
+      
+      /* deal with nonzero DC offsets if provided by user or if option -D was invoked */
+      if (dcoffi != 0 || dcoffq != 0)
+	for (k = 0; k < 2*fftlen; k += 2)
+	  {
+	    fftinbuf[k]   -= dcoffi;
+	    fftinbuf[k+1] -= dcoffq; 
+	  }
+      
       /* transform, swap, and compute power */
       if (invert) swap_iandq(fftinbuf,fftlen); 
       if (hanning) vector_window(fftinbuf,fftlen);
@@ -416,7 +421,7 @@ int main(int argc, char *argv[])
     }
   
   /* set DC to average of neighboring values  */
-  total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2.0; 
+  /* total[fftlen/2] = (total[fftlen/2-1]+total[fftlen/2+1]) / 2.0;  */
 
   /* apply Chebyshev to detected power if needed */
   if (degree) chebyshev_window(total,fftlen,chebcoeff,degree);
